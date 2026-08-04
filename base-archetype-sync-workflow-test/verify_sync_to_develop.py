@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
+import time
 import unittest
 
 
@@ -20,6 +21,25 @@ GIT = str(SYSTEM_GIT) if SYSTEM_GIT.is_file() else shutil.which("git")
 STEP_NAME = re.compile(r"^(?P<indent>\s*)-\s+name:\s*(?P<name>.+?)\s*$")
 RUN_BLOCK = re.compile(r"^(?P<indent>\s*)run:\s*\|\s*$")
 WORKFLOW_PATH: Path | None = None
+
+
+class _RetryingTemporaryDirectory(tempfile.TemporaryDirectory[str]):
+    """Clean up fixture repositories after Git's asynchronous housekeeping ends."""
+
+    def cleanup(self) -> None:
+        try:
+            super().cleanup()
+            return
+        except OSError:
+            pass
+        for _ in range(10):
+            time.sleep(0.1)
+            try:
+                shutil.rmtree(self.name)
+                return
+            except OSError:
+                continue
+        shutil.rmtree(self.name)
 
 
 @dataclass(frozen=True)
@@ -418,7 +438,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
         )
 
     def test_empty_suffix_is_skipped(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -432,7 +452,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertEqual(outputs, {"should_sync": "false"})
 
     def test_missing_development_branch_is_skipped(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -446,7 +466,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertEqual(outputs, {"should_sync": "false"})
 
     def test_development_branch_already_contains_base_is_skipped(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -460,7 +480,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertEqual(outputs, {"should_sync": "false"})
 
     def test_creates_sync_branch_from_base(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -479,7 +499,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             )
 
     def test_existing_sync_branch_rebases_and_preserves_merges(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -514,7 +534,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertTrue(merges)
 
     def test_rebase_conflict_does_not_push_sync_branch(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -535,7 +555,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertEqual(_remote_head(fixture, sync_branch), before)
 
     def test_force_with_lease_rejects_a_concurrent_remote_update(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -569,7 +589,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertEqual(_remote_head(fixture, sync_branch), racer)
 
     def test_repeated_sync_is_idempotent(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -592,7 +612,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertEqual(_remote_head(fixture, sync_branch), before)
 
     def test_valid_suffix_with_slashes_and_dots_is_not_split(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             fixture = _setup_repository(
                 root,
@@ -639,7 +659,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
         return completed, (root / "gh.log").read_text(encoding="utf-8")
 
     def test_existing_internal_sync_pull_request_is_updated_and_labeled(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             completed, log = self._run_upsert(
                 Path(temporary),
                 existing_pr="101",
@@ -651,7 +671,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertNotIn("pr create", log)
 
     def test_missing_or_cross_repository_sync_pull_request_is_created(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             completed, log = self._run_upsert(
                 Path(temporary),
                 existing_pr="",
@@ -662,7 +682,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
             self.assertIn("--label kind/internal", log)
 
     def test_missing_internal_label_warns_without_blocking_pull_request_creation(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             completed, log = self._run_upsert(
                 Path(temporary),
                 existing_pr="",
@@ -676,7 +696,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
     def test_github_cli_failures_propagate(self) -> None:
         for existing_pr, failure in (("", "create"), ("101", "edit")):
             with self.subTest(existing_pr=existing_pr, failure=failure):
-                with tempfile.TemporaryDirectory() as temporary:
+                with _RetryingTemporaryDirectory() as temporary:
                     completed, _ = self._run_upsert(
                         Path(temporary),
                         existing_pr=existing_pr,
@@ -686,7 +706,7 @@ class SyncWorkflowBehaviorTests(unittest.TestCase):
                     self.assertNotEqual(completed.returncode, 0)
 
     def test_failure_comment_errors_are_not_silenced(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with _RetryingTemporaryDirectory() as temporary:
             root = Path(temporary)
             stubs = root / "stubs"
             stubs.mkdir()

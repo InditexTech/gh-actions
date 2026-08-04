@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ACTION_ROOT = ROOT / "base-archetype-integrity"
 CONTRACT_PATH = ACTION_ROOT / "contract.json"
 MODULE_PATH = ACTION_ROOT / "verify_base_archetype.py"
+REUSABLE_WORKFLOW = ROOT / ".github/workflows/verify-base-archetype.yml"
 
 SPEC = importlib.util.spec_from_file_location("verify_base_archetype", MODULE_PATH)
 assert SPEC is not None
@@ -330,3 +331,21 @@ class VerifyBaseArchetypeTests(unittest.TestCase):
         forbidden = contract["forbidden_base_paths"]
         assert isinstance(forbidden, list)
         self.assertFalse(seen & set(forbidden))
+
+    def test_reusable_workflow_gates_behavior_on_static_validation(self) -> None:
+        workflow = REUSABLE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertRegex(
+            workflow,
+            r"uses: zizmorcore/zizmor-action@[0-9a-f]{40}",
+        )
+        self.assertIn("persona: pedantic", workflow)
+        self.assertIn("advanced-security: false", workflow)
+        self.assertRegex(
+            workflow,
+            r"(?ms)sync-workflow-behavior:\s+needs:\s+- verify\s+- zizmor",
+        )
+        self.assertRegex(
+            workflow,
+            r"uses: InditexTech/gh-actions/"
+            r"base-archetype-sync-workflow-test@[0-9a-f]{40}",
+        )
