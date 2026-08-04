@@ -78,4 +78,4 @@ jobs:
           persist-credentials: false
 
       - name: Exercise sync-to-develop behavior
-        uses: InditexTech/gh-actions/base-archetype-sync-workflow-test@34c64c0a21efb4e1fbed266ffbf67bcf4eaf9872
+        uses: InditexTech/gh-actions/base-archetype-sync-workflow-test@9cf5ee42340839025733370cf5b9497056d6b190
