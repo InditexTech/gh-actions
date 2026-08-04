@@ -15,6 +15,16 @@ from typing import Mapping, Sequence
 
 SHA_PIN = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
 USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s*([^\s#]+)", re.MULTILINE)
+CHECKOUT_V7_REFERENCE = (
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+)
+CHECKOUT_USES_LINE = re.compile(
+    r"^\s*(?:-\s+)?uses:\s*(actions/checkout@[^\s#]+)"
+)
+STEP_START = re.compile(r"^\s*-\s+")
+PERSIST_CREDENTIALS_FALSE = re.compile(
+    r"^\s*persist-credentials\s*:\s*(?:false|['\"]false['\"])\s*(?:#.*)?$"
+)
 CANONICAL_INTEGRITY_WORKFLOW = re.compile(
     r"^InditexTech/gh-actions/\.github/workflows/"
     r"verify-base-archetype\.yml@[0-9a-f]{40}$"
@@ -70,7 +80,9 @@ def development_branch(default_branch: str, base_branch: str) -> str | None:
         return "develop"
     prefix = f"{default_branch}-"
     if base_branch.startswith(prefix):
-        return f"develop-{base_branch.removeprefix(prefix)}"
+        suffix = base_branch.removeprefix(prefix)
+        if suffix:
+            return f"develop-{suffix}"
     return None
 
 
@@ -202,6 +214,7 @@ def _validate_workflows(
                     f"{path}: external uses reference is not a 40-character SHA: "
                     f"{reference}"
                 )
+        errors.extend(_validate_checkout_hardening(path, text))
 
     for name in ("pr-verify.yml", "push-verify.yml"):
         path = f".github/workflows/{name}"
@@ -224,6 +237,28 @@ def _validate_workflows(
         text = _decode_text(integrity_path, files[integrity_path], errors)
         if text is not None:
             errors.extend(_validate_integrity_workflow(text))
+    return errors
+
+
+def _validate_checkout_hardening(path: str, text: str) -> list[str]:
+    """Require the hardened checkout release and ephemeral credentials."""
+
+    errors: list[str] = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        reference = CHECKOUT_USES_LINE.match(line)
+        if reference is None:
+            continue
+        if reference.group(1) != CHECKOUT_V7_REFERENCE:
+            errors.append(f"{path}: checkout must use the approved v7 SHA pin")
+
+        step_lines: list[str] = []
+        for candidate in lines[index + 1 :]:
+            if STEP_START.match(candidate):
+                break
+            step_lines.append(candidate)
+        if not any(PERSIST_CREDENTIALS_FALSE.match(item) for item in step_lines):
+            errors.append(f"{path}: checkout must set persist-credentials: false")
     return errors
 
 
@@ -257,6 +292,13 @@ def _validate_sync_workflow(text: str) -> list[str]:
         text,
     ):
         errors.append("sync-to-develop.yml must set DEFAULT_BRANCH from repository context")
+    if not re.search(
+        r"(?m)^\s*ref\s*:\s*\$\{\{\s*github\.event\.pull_request\.base\.ref\s*\}\}",
+        text,
+    ):
+        errors.append(
+            "sync-to-develop.yml must check out the pull request base branch"
+        )
     required_conditions = {
         "sync-to-develop.yml must require a merged pull request": (
             r"github\.event\.pull_request\.merged"
@@ -276,6 +318,19 @@ def _validate_sync_workflow(text: str) -> list[str]:
     }
     for message, condition in required_conditions.items():
         if re.search(condition, text) is None:
+            errors.append(message)
+    unsafe_target_patterns = {
+        "sync-to-develop.yml must not reference pull request head data": (
+            r"github\.event\.pull_request\.head\b"
+        ),
+        "sync-to-develop.yml must not use pull request refs": r"refs/pull/",
+        "sync-to-develop.yml must not enable unsafe PR checkout": (
+            r"allow-unsafe-pr-checkout"
+        ),
+        "sync-to-develop.yml must not use self-hosted runners": r"(?i)\bself-hosted\b",
+    }
+    for message, pattern in unsafe_target_patterns.items():
+        if re.search(pattern, text):
             errors.append(message)
     if re.search(r"(?i)\bmain\b", text):
         errors.append("sync-to-develop.yml must not hardcode a main branch role")

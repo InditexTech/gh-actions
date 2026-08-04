@@ -76,6 +76,12 @@
       "default_branch": "trunk",
       "base_branch": "release",
       "expected_development_branch": null
+    },
+    {
+      "visibility": "private",
+      "default_branch": "main",
+      "base_branch": "main-",
+      "expected_development_branch": null
     }
   ]
 }

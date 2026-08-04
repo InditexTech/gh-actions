@@ -50,11 +50,17 @@ def _valid_source() -> dict[str, bytes]:
     )
     source[".github/workflows/pr-verify.yml"] = (
         b"# Copyright {{ CURRENT_YEAR }} InditexTech\n"
-        b"jobs:\n  verify:\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n"
+        b"jobs:\n  verify:\n    steps:\n"
+        b"      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n"
+        b"        with:\n"
+        b"          persist-credentials: false\n"
     )
     source[".github/workflows/push-verify.yml"] = (
         b"# Copyright {{ CURRENT_YEAR }} InditexTech\n"
-        b"jobs:\n  verify:\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n"
+        b"jobs:\n  verify:\n    steps:\n"
+        b"      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n"
+        b"        with:\n"
+        b"          persist-credentials: false\n"
     )
     source[".github/workflows/archetype-integrity.yml"] = (
         b"jobs:\n  verify:\n    uses: "
@@ -79,6 +85,10 @@ jobs:
       format('{0}-', github.event.repository.default_branch)))
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.ref }}
       - run: echo sync
 """
     return source
@@ -136,6 +146,28 @@ class VerifyBaseArchetypeTests(unittest.TestCase):
         self.assertEqual(
             validator.validate_files(source, _contract(), year=2032),
             [],
+        )
+
+    def test_checkout_requires_the_hardened_release_and_ephemeral_credentials(self) -> None:
+        source = _valid_source()
+        source[".github/workflows/pr-verify.yml"] = (
+            source[".github/workflows/pr-verify.yml"].replace(
+                b"persist-credentials: false",
+                b"persist-credentials: true",
+            )
+        )
+        source[".github/workflows/push-verify.yml"] = (
+            source[".github/workflows/push-verify.yml"].replace(
+                b"3d3c42e5aac5ba805825da76410c181273ba90b1",
+                b"0123456789abcdef0123456789abcdef01234567",
+            )
+        )
+        errors = validator.validate_files(source, _contract(), year=2032)
+        self.assertTrue(
+            any("checkout must set persist-credentials: false" in error for error in errors)
+        )
+        self.assertTrue(
+            any("checkout must use the approved v7 SHA pin" in error for error in errors)
         )
 
     def test_generic_workflow_cannot_leak_base_validation(self) -> None:
@@ -202,6 +234,32 @@ class VerifyBaseArchetypeTests(unittest.TestCase):
         errors = validator.validate_files(source, _contract(), year=2032)
         self.assertIn("sync-to-develop.yml must use pull_request_target", errors)
 
+    def test_sync_workflow_rejects_unsafe_pull_request_target_controls(self) -> None:
+        unsafe_cases = {
+            "head": (
+                b"\n# github.event.pull_request.head.sha\n",
+                "must not reference pull request head data",
+            ),
+            "pull-ref": (
+                b"\n# refs/pull/42/merge\n",
+                "must not use pull request refs",
+            ),
+            "unsafe-checkout": (
+                b"\n# allow-unsafe-pr-checkout\n",
+                "must not enable unsafe PR checkout",
+            ),
+            "self-hosted": (
+                b"\n# self-hosted\n",
+                "must not use self-hosted runners",
+            ),
+        }
+        for name, (unsafe_content, expected_error) in unsafe_cases.items():
+            with self.subTest(name=name):
+                source = _valid_source()
+                source[".github/workflows/sync-to-develop.yml"] += unsafe_content
+                errors = validator.validate_files(source, _contract(), year=2032)
+                self.assertTrue(any(expected_error in error for error in errors))
+
     def test_branch_mapping_fixture_exercises_development_branches(self) -> None:
         self.assertEqual(validator.development_branch("main", "main"), "develop")
         self.assertEqual(validator.development_branch("trunk", "trunk"), "develop")
@@ -217,6 +275,7 @@ class VerifyBaseArchetypeTests(unittest.TestCase):
             "develop-hotfix",
         )
         self.assertIsNone(validator.development_branch("trunk", "release"))
+        self.assertIsNone(validator.development_branch("main", "main-"))
 
         contract = _contract()
         cases = contract["branch_mapping_cases"]
