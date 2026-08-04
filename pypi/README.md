@@ -6,7 +6,7 @@ publishing. It rejects an empty directory, nested directories, files outside
 distributions before invoking PyPI's official action.
 
 ```yaml
-- uses: InditexTech/gh-actions-publish/pypi@<immutable-sha>
+- uses: InditexTech/gh-actions/pypi@<immutable-sha>
   with:
     packages-dir: .release/pypi
 ```
