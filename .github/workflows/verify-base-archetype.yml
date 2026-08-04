@@ -1,0 +1,38 @@
+---
+name: Verify base archetype
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: Immutable base-archetype commit to validate.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out base-archetype candidate
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install pinned workflow linter
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+      - name: Lint base workflows
+        run: |
+          set -euo pipefail
+          "$(go env GOPATH)/bin/actionlint" .github/workflows/*.yml
+
+      - name: Validate base asset contract
+        uses: InditexTech/gh-actions/base-archetype-integrity@0eedbf2cc2630d3997cd6103e7f5269f0afe9601
