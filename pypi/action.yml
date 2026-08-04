@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+
+name: Publish Python distributions to PyPI
+description: Publish pre-built Python distributions using PyPI trusted publishing.
+
+inputs:
+  packages-dir:
+    description: Directory containing the pre-built Python distributions.
+    required: true
+  attestations:
+    description: Whether to publish PEP 740 attestations.
+    required: false
+    default: 'true'
+  skip-existing:
+    description: Whether to tolerate already-published distribution files when resuming a release.
+    required: false
+    default: 'false'
+  verify-metadata:
+    description: Whether to verify distribution metadata before uploading.
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Publish distributions
+      uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+      with:
+        attestations: ${{ inputs.attestations }}
+        packages-dir: ${{ inputs.packages-dir }}
+        skip-existing: ${{ inputs.skip-existing }}
+        verify-metadata: ${{ inputs.verify-metadata }}
