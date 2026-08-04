@@ -89,7 +89,12 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.base.ref }}
-      - run: echo sync
+      - run: |
+          suffix="${BASE_BRANCH#"$DEFAULT_BRANCH"-}"
+          if [[ -z "$suffix" ]]; then
+            exit 0
+          fi
+          echo sync
 """
     return source
 
@@ -233,6 +238,20 @@ class VerifyBaseArchetypeTests(unittest.TestCase):
         )
         errors = validator.validate_files(source, _contract(), year=2032)
         self.assertIn("sync-to-develop.yml must use pull_request_target", errors)
+
+    def test_sync_workflow_requires_an_empty_suffix_guard(self) -> None:
+        source = _valid_source()
+        source[".github/workflows/sync-to-develop.yml"] = (
+            source[".github/workflows/sync-to-develop.yml"].replace(
+                b'if [[ -z "$suffix" ]]',
+                b'if [[ -n "$suffix" ]]',
+            )
+        )
+        errors = validator.validate_files(source, _contract(), year=2032)
+        self.assertIn(
+            "sync-to-develop.yml must skip empty release suffixes",
+            errors,
+        )
 
     def test_sync_workflow_rejects_unsafe_pull_request_target_controls(self) -> None:
         unsafe_cases = {

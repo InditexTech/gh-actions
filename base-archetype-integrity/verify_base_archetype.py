@@ -299,6 +299,8 @@ def _validate_sync_workflow(text: str) -> list[str]:
         errors.append(
             "sync-to-develop.yml must check out the pull request base branch"
         )
+    if not re.search(r'\[\[\s+-z\s+"\$suffix"\s+\]\]', text):
+        errors.append("sync-to-develop.yml must skip empty release suffixes")
     required_conditions = {
         "sync-to-develop.yml must require a merged pull request": (
             r"github\.event\.pull_request\.merged"
