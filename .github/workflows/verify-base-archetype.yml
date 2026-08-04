@@ -60,3 +60,22 @@ jobs:
           version: 1.29.0
           advanced-security: false
           annotations: true
+
+  sync-workflow-behavior:
+    needs:
+      - verify
+      - zizmor
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out base-archetype candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Exercise sync-to-develop behavior
+        uses: InditexTech/gh-actions/base-archetype-sync-workflow-test@34c64c0a21efb4e1fbed266ffbf67bcf4eaf9872
