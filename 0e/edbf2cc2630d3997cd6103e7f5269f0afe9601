@@ -1,0 +1,33 @@
+base-archetype-integrity/action.yml
+  s_1238ad889ce79e::t_11f0756daad61e 1-20
+base-archetype-integrity/contract.json
+  s_1238ad889ce79e::t_0d68a88f064143 1-81
+.github/workflows/testpypi-smoke.yml
+  s_1238ad889ce79e::t_be6cf9e1c6339b 20,62
+.github/workflows/verify.yml
+  s_1238ad889ce79e::t_0ea4632750c543 18,29
+README.md
+  s_1238ad889ce79e::t_44644c9c25511f 1-12
+base-archetype-integrity/verify_base_archetype.py
+  s_1238ad889ce79e::t_8d326ccea09f9f 1-397
+pypi/README.md
+  s_1238ad889ce79e::t_892d95a8c96199 9
+tests/test_base_archetype_integrity.py
+  s_1238ad889ce79e::t_4e06eb6fa6a688 1-254
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "0eedbf2cc2630d3997cd6103e7f5269f0afe9601",
+  "prompts": {},
+  "sessions": {
+    "s_1238ad889ce79e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "c9367174-461f-4cc3-bd88-8a9c2cbf7805",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
