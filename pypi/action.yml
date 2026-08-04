@@ -8,6 +8,10 @@ inputs:
   packages-dir:
     description: Directory containing the pre-built Python distributions.
     required: true
+  repository-url:
+    description: Official PyPI or TestPyPI legacy endpoint. Use TestPyPI only in a protected test environment.
+    required: false
+    default: 'https://upload.pypi.org/legacy/'
   attestations:
     description: Whether to publish PEP 740 attestations.
     required: false
@@ -20,14 +24,28 @@ inputs:
     description: Whether to verify distribution metadata before uploading.
     required: false
     default: 'true'
+  validate-distributions:
+    description: Whether to reject empty, nested, or unsupported distribution inputs before publishing.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
   steps:
+    - name: Validate distribution input
+      if: inputs.validate-distributions == 'true'
+      shell: bash
+      env:
+        PACKAGES_DIR: ${{ inputs.packages-dir }}
+        REPOSITORY_URL: ${{ inputs.repository-url }}
+      run: >-
+        python3 "$GITHUB_ACTION_PATH/scripts/validate_distributions.py"
+        "$PACKAGES_DIR" --repository-url "$REPOSITORY_URL"
     - name: Publish distributions
       uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
       with:
         attestations: ${{ inputs.attestations }}
         packages-dir: ${{ inputs.packages-dir }}
+        repository-url: ${{ inputs.repository-url }}
         skip-existing: ${{ inputs.skip-existing }}
         verify-metadata: ${{ inputs.verify-metadata }}

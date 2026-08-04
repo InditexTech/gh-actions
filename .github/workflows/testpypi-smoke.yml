@@ -1,0 +1,70 @@
+name: TestPyPI trusted publishing smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testpypi-smoke-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build isolated TestPyPI smoke package
+    if: github.repository_owner == 'InditexTech'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Build a uniquely versioned smoke distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="$GITHUB_WORKSPACE/.testpypi-smoke"
+          package_name="inditextech-ci-governance-smoke"
+          mkdir -p "$package_root/src/inditextech_ci_governance_smoke"
+          cat >"$package_root/pyproject.toml" <<EOF
+          [build-system]
+          requires = ["setuptools>=69"]
+          build-backend = "setuptools.build_meta"
+
+          [project]
+          name = "$package_name"
+          version = "0.0.${GITHUB_RUN_NUMBER}.post${GITHUB_RUN_ATTEMPT}"
+          description = "InditexTech CI governance TestPyPI smoke package"
+          requires-python = ">=3.12"
+          EOF
+          touch "$package_root/src/inditextech_ci_governance_smoke/__init__.py"
+          python -m pip install --disable-pip-version-check --quiet build
+          python -m build --outdir "$package_root/dist" "$package_root"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: testpypi-distributions
+          path: .testpypi-smoke/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish isolated TestPyPI smoke package
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: testpypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: testpypi-distributions
+          path: .testpypi-smoke/dist
+      - uses: ./pypi
+        with:
+          packages-dir: .testpypi-smoke/dist
+          repository-url: https://test.pypi.org/legacy/
