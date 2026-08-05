@@ -12,13 +12,76 @@ from pathlib import Path
 APPROVED_CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 ROOT = Path(__file__).resolve().parents[1]
 ACTION = ROOT / "pypi" / "action.yml"
+ACTION_README = ROOT / "pypi" / "README.md"
 VERIFY_WORKFLOW = ROOT / ".github" / "workflows" / "verify.yml"
+EXPECTED_INPUTS = {
+    "packages-dir": {"required": "true"},
+    "repository-url": {
+        "required": "false",
+        "default": "https://upload.pypi.org/legacy/",
+    },
+    "attestations": {"required": "false", "default": "true"},
+    "skip-existing": {"required": "false", "default": "false"},
+    "verify-metadata": {"required": "false", "default": "true"},
+}
+
+
+def _input_contract(content: str) -> dict[str, dict[str, str]]:
+    inputs = content.split("inputs:\n", 1)[1].split("\nruns:\n", 1)[0]
+    contract: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    for line in inputs.splitlines():
+        input_match = re.fullmatch(r"  ([a-z0-9-]+):", line)
+        if input_match:
+            current = input_match.group(1)
+            contract[current] = {}
+            continue
+        property_match = re.fullmatch(r"    ([a-z-]+):\s*(.*)", line)
+        if current is not None and property_match:
+            value = property_match.group(2).strip().strip("'\"")
+            contract[current][property_match.group(1)] = value
+    return contract
 
 
 class PublishActionContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.action_content = ACTION.read_text(encoding="utf-8")
+        self.action_readme_content = ACTION_README.read_text(encoding="utf-8")
         self.verify_workflow_content = VERIFY_WORKFLOW.read_text(encoding="utf-8")
+
+    def test_public_input_contract_is_exact_and_documented(self) -> None:
+        contract = _input_contract(self.action_content)
+        self.assertEqual(set(contract), set(EXPECTED_INPUTS))
+        for name, expected in EXPECTED_INPUTS.items():
+            with self.subTest(input=name):
+                self.assertEqual(
+                    {
+                        key: value
+                        for key, value in contract[name].items()
+                        if key in {"required", "default"}
+                    },
+                    expected,
+                )
+                self.assertTrue(contract[name].get("description"))
+        documented = set(
+            re.findall(r"^\| `([a-z0-9-]+)` \|", self.action_readme_content, re.M)
+        )
+        self.assertEqual(documented, set(EXPECTED_INPUTS))
+        self.assertNotIn("\noutputs:", self.action_content)
+        self.assertIn("The action has no outputs", self.action_readme_content)
+
+    def test_catalog_contains_one_cohesive_runtime_action(self) -> None:
+        self.assertEqual(sorted(ROOT.glob("*/action.yml")), [ACTION])
+        self.assertEqual(
+            sorted(
+                path
+                for path in (ROOT / "pypi" / "scripts").glob("*")
+                if path.is_file()
+            ),
+            [ROOT / "pypi" / "scripts" / "validate_distributions.py"],
+        )
+        self.assertFalse(list(ROOT.glob("**/package-lock.json")))
+        self.assertFalse(list(ROOT.glob("**/requirements*.txt")))
 
     def test_uses_an_immutable_upstream_publish_action(self) -> None:
         match = re.search(
@@ -41,16 +104,42 @@ class PublishActionContractTests(unittest.TestCase):
         )
 
     def test_validates_before_publishing_by_default(self) -> None:
-        self.assertIn("validate-distributions:", self.action_content)
-        self.assertIn("default: 'true'", self.action_content)
-        validate_step = self.action_content.index("- name: Validate distribution input")
+        self.assertNotIn("validate-distributions:", self.action_content)
+        validate_step = self.action_content.index(
+            "- name: Validate trusted publishing boundary"
+        )
         publish_step = self.action_content.index("- name: Publish distributions")
         self.assertLess(validate_step, publish_step)
+        validation_block = self.action_content[validate_step:publish_step]
+        self.assertNotIn("\n      if:", validation_block)
         self.assertIn(
             'python3 "$GITHUB_ACTION_PATH/scripts/validate_distributions.py"',
-            self.action_content,
+            validation_block,
         )
-        self.assertIn('--repository-url "$REPOSITORY_URL"', self.action_content)
+        for fragment in (
+            '--repository-url "$REPOSITORY_URL"',
+            '--attestations "$ATTESTATIONS"',
+            '--skip-existing "$SKIP_EXISTING"',
+            '--verify-metadata "$VERIFY_METADATA"',
+        ):
+            self.assertIn(fragment, validation_block)
+
+    def test_action_is_oidc_only_and_forwards_every_validated_input(self) -> None:
+        self.assertNotIn("\n  password:", self.action_content)
+        self.assertNotIn("\n  user:", self.action_content)
+        publish_block = self.action_content.split(
+            "- name: Publish distributions",
+            1,
+        )[1]
+        for name in EXPECTED_INPUTS:
+            self.assertIn(f"{name}: ${{{{ inputs.{name} }}}}", publish_block)
+        self.assertIn("id-token: write", self.action_readme_content)
+        self.assertIn("ubuntu-24.04", self.action_readme_content)
+        self.assertIn(
+            "does not support being\ninvoked from another composite action",
+            self.action_readme_content,
+        )
+        self.assertIn("protected TestPyPI canary", self.action_readme_content)
 
     def test_all_external_actions_are_pinned_to_commit_shas(self) -> None:
         for workflow in sorted(ROOT.glob("**/*.yml")):
@@ -70,7 +159,7 @@ class PublishActionContractTests(unittest.TestCase):
             r"uses:\s+actions/checkout@([0-9a-f]{40})\b",
             self.verify_workflow_content,
         )
-        self.assertEqual(checkout_shas, [APPROVED_CHECKOUT_SHA] * 3)
+        self.assertEqual(checkout_shas, [APPROVED_CHECKOUT_SHA] * 4)
         self.assertEqual(
             self.verify_workflow_content.count("persist-credentials: false"),
             len(checkout_shas),
@@ -79,6 +168,19 @@ class PublishActionContractTests(unittest.TestCase):
             "python3 -m unittest discover -s tests -v",
             self.verify_workflow_content,
         )
+        self.assertEqual(
+            self.verify_workflow_content.count("runs-on: ubuntu-24.04"),
+            4,
+        )
+        self.assertIn("ACTION_VALIDATOR_VERSION: 0.9.0", self.verify_workflow_content)
+        self.assertIn(
+            "ACTION_VALIDATOR_SHA256: "
+            "9f42f94fca5b8d04c13bccfbb331104b37a9250650d89ae58dc888d46206f9b9",
+            self.verify_workflow_content,
+        )
+        self.assertIn('"$binary" pypi/action.yml', self.verify_workflow_content)
+        self.assertIn("uses: ./pypi", self.verify_workflow_content)
+        self.assertIn('[[ "$PREFLIGHT_OUTCOME" == "failure" ]]', self.verify_workflow_content)
         self.assertIn(
             "reviewdog/action-actionlint@50842263c20a7c46bd0065b9e624d3c569db061e",
             self.verify_workflow_content,

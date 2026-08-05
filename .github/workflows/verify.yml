@@ -16,17 +16,71 @@ concurrency:
 jobs:
   contracts:
     name: Local PyPI action contracts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate action metadata with exact tool binary
+        env:
+          ACTION_VALIDATOR_SHA256: 9f42f94fca5b8d04c13bccfbb331104b37a9250650d89ae58dc888d46206f9b9
+          ACTION_VALIDATOR_VERSION: 0.9.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="$RUNNER_TEMP/action-validator"
+          curl --fail --location --silent --show-error \
+            "https://github.com/mpalmer/action-validator/releases/download/v${ACTION_VALIDATOR_VERSION}/action-validator_linux_amd64" \
+            --output "$binary"
+          echo "$ACTION_VALIDATOR_SHA256  $binary" | sha256sum --check
+          chmod 0755 "$binary"
+          "$binary" pypi/action.yml
+          "$binary" .github/workflows/verify.yml
+
+      - name: Compile and test runtime validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile \
+            pypi/scripts/validate_distributions.py
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+
+  local-action:
+    name: Local composite preflight
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: python3 -m unittest discover -s tests -v
+
+      - name: Create inert distribution fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          : > dist/local-action-0.0.0-py3-none-any.whl
+
+      - name: Reject publishing without OIDC permission
+        id: missing-oidc
+        continue-on-error: true
+        uses: ./pypi
+        with:
+          packages-dir: dist
+
+      - name: Assert local action failed closed
+        env:
+          PREFLIGHT_OUTCOME: ${{ steps.missing-oidc.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PREFLIGHT_OUTCOME" == "failure" ]]
 
   actionlint:
     name: GitHub Actions syntax
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       checks: write # Lets reviewdog publish actionlint check results.
@@ -42,7 +96,7 @@ jobs:
 
   zizmor:
     name: GitHub Actions security audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
