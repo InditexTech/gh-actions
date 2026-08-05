@@ -123,6 +123,26 @@ class DistributionValidationTests(unittest.TestCase):
         self.assertNotEqual(nested_result.returncode, 0)
         self.assertIn("nested directories", nested_result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "POSIX permissions required")
+    def test_unreadable_directory_uses_the_failure_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            workspace = Path(temporary_directory)
+            dist = workspace / "dist"
+            dist.mkdir()
+            dist.chmod(0)
+            try:
+                result = self.run_validator(workspace, "dist")
+            finally:
+                dist.chmod(0o700)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn(
+            "Distribution validation failed: cannot read directory",
+            result.stderr,
+        )
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_rejects_outside_and_parent_traversal_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             workspace = Path(temporary_directory) / "workspace"

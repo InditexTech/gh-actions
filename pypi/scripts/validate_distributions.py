@@ -10,7 +10,7 @@ import os
 import stat
 import sys
 from pathlib import Path
-from typing import Mapping, Never
+from typing import Mapping, NoReturn
 
 SUPPORTED_SUFFIXES = (".whl", ".tar.gz", ".zip")
 SUPPORTED_REPOSITORY_URLS = frozenset(
@@ -26,13 +26,13 @@ OIDC_ENVIRONMENT_VARIABLES = (
 )
 
 
-def fail(message: str) -> Never:
+def fail(message: str) -> NoReturn:
     print(f"Distribution validation failed: {message}", file=sys.stderr)
     raise SystemExit(1)
 
 
 class ValidationArgumentParser(argparse.ArgumentParser):
-    def error(self, message: str) -> Never:
+    def error(self, message: str) -> NoReturn:
         fail(f"invalid arguments: {message}")
 
 
@@ -111,7 +111,10 @@ def validate(
     validate_boolean("verify-metadata", verify_metadata)
     validate_oidc_environment(environment)
     directory = resolve_within_workspace(packages_dir, workspace)
-    entries = sorted(directory.iterdir(), key=lambda path: path.name)
+    try:
+        entries = sorted(directory.iterdir(), key=lambda path: path.name)
+    except OSError:
+        fail(f"cannot read directory: {directory}")
     if not entries:
         fail(f"directory is empty: {directory}")
 
