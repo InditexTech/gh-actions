@@ -1,4 +1,4 @@
-name: Verify reusable publishing action
+name: Verify shared actions catalog
 
 on:
   pull_request:
@@ -9,13 +9,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: verify-shared-actions-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   contracts:
-    name: Contract and regression tests
+    name: Local PyPI action contracts
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: python3 -m unittest discover -s tests -v
 
   actionlint:
@@ -23,11 +29,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      checks: write
+      checks: write # Lets reviewdog publish actionlint check results.
       contents: read
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: reviewdog/action-actionlint@50842263c20a7c46bd0065b9e624d3c569db061e # v1
         with:
           reporter: github-check
           fail_level: error
+
+  zizmor:
+    name: GitHub Actions security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          inputs: .github/workflows pypi/action.yml
+          collect: workflows,actions
+          online-audits: false
+          persona: pedantic
+          version: 1.29.0
+          advanced-security: false
+          annotations: true

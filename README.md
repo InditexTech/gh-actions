@@ -1,15 +1,16 @@
 # Shared GitHub Actions
 
-This internal catalog contains versioned, nonsecret GitHub Actions and
-reusable workflows for InditexTech repositories.
+This internal catalog contains the reusable runtime action for publishing
+pre-built Python distributions through trusted publishing.
 
-- `pypi/` publishes pre-built Python distributions through trusted publishing.
-- `base-archetype-integrity/` validates a base-archetype checkout without
-  executing candidate code.
-- `base-archetype-sync-workflow-test/` executes the extracted
-  `sync-to-develop.yml` shell blocks against hermetic Git and GitHub CLI
-  fixtures with a scrubbed, credential-free environment.
+## Available action
 
-Privileged CI governance orchestration, App credentials, and live acceptance
-pilots remain in `internal-ops`. Consumers must pin every catalog reference to
-an immutable commit SHA.
+- `pypi/` publishes pre-built Python distributions to PyPI or TestPyPI with
+  SHA-pinned upstream dependencies and local distribution validation.
+
+The repository intentionally keeps only the PyPI action, its runtime script,
+and isolated local tests for the action contract and distribution validator.
+Cross-repository integration, acceptance, and protected governance flows
+(including TestPyPI smoke coverage) live in `internal-ops`.
+
+Consumers must pin every catalog reference to an immutable commit SHA.

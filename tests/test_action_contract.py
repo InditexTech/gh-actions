@@ -9,43 +9,48 @@ import unittest
 from pathlib import Path
 
 
+APPROVED_CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 ROOT = Path(__file__).resolve().parents[1]
 ACTION = ROOT / "pypi" / "action.yml"
-TESTPYPI_SMOKE = ROOT / ".github" / "workflows" / "testpypi-smoke.yml"
+VERIFY_WORKFLOW = ROOT / ".github" / "workflows" / "verify.yml"
 
 
 class PublishActionContractTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.content = ACTION.read_text(encoding="utf-8")
+        self.action_content = ACTION.read_text(encoding="utf-8")
+        self.verify_workflow_content = VERIFY_WORKFLOW.read_text(encoding="utf-8")
 
     def test_uses_an_immutable_upstream_publish_action(self) -> None:
         match = re.search(
             r"uses:\s+pypa/gh-action-pypi-publish@([0-9a-f]{40})\b",
-            self.content,
+            self.action_content,
         )
         self.assertIsNotNone(match)
 
     def test_exposes_testpypi_without_weakening_production_default(self) -> None:
         self.assertRegex(
-            self.content,
+            self.action_content,
             r"repository-url:\n"
             r"\s+description:.*\n"
             r"\s+required: false\n"
             r"\s+default: 'https://upload\.pypi\.org/legacy/'",
         )
-        self.assertIn("repository-url: ${{ inputs.repository-url }}", self.content)
+        self.assertIn(
+            "repository-url: ${{ inputs.repository-url }}",
+            self.action_content,
+        )
 
     def test_validates_before_publishing_by_default(self) -> None:
-        self.assertIn("validate-distributions:", self.content)
-        self.assertIn("default: 'true'", self.content)
-        validate_step = self.content.index("- name: Validate distribution input")
-        publish_step = self.content.index("- name: Publish distributions")
+        self.assertIn("validate-distributions:", self.action_content)
+        self.assertIn("default: 'true'", self.action_content)
+        validate_step = self.action_content.index("- name: Validate distribution input")
+        publish_step = self.action_content.index("- name: Publish distributions")
         self.assertLess(validate_step, publish_step)
         self.assertIn(
             'python3 "$GITHUB_ACTION_PATH/scripts/validate_distributions.py"',
-            self.content,
+            self.action_content,
         )
-        self.assertIn('--repository-url "$REPOSITORY_URL"', self.content)
+        self.assertIn('--repository-url "$REPOSITORY_URL"', self.action_content)
 
     def test_all_external_actions_are_pinned_to_commit_shas(self) -> None:
         for workflow in sorted(ROOT.glob("**/*.yml")):
@@ -60,22 +65,35 @@ class PublishActionContractTests(unittest.TestCase):
                     f"{workflow}: {owner_repository} is not pinned to a commit SHA",
                 )
 
-    def test_testpypi_build_is_unprivileged_and_publish_is_isolated(self) -> None:
-        content = TESTPYPI_SMOKE.read_text(encoding="utf-8")
-        build_job, publish_job = re.split(r"\n  publish:\n", content, maxsplit=1)
-
-        self.assertIn("\n  build:\n", build_job)
-        self.assertIn("github.repository_owner == 'InditexTech'", build_job)
-        self.assertNotIn("id-token:", build_job)
-        self.assertIn("needs: build", publish_job)
-        self.assertIn("environment: testpypi", publish_job)
-        self.assertIn("id-token: write", publish_job)
-        self.assertIn("actions/upload-artifact@", build_job)
-        self.assertIn("actions/download-artifact@", publish_job)
-
-    def test_testpypi_smoke_versions_are_unique_on_rerun(self) -> None:
-        content = TESTPYPI_SMOKE.read_text(encoding="utf-8")
-        self.assertIn("0.0.${GITHUB_RUN_NUMBER}.post${GITHUB_RUN_ATTEMPT}", content)
+    def test_verify_workflow_hardens_checkouts_and_scans_local_catalog_yaml(self) -> None:
+        checkout_shas = re.findall(
+            r"uses:\s+actions/checkout@([0-9a-f]{40})\b",
+            self.verify_workflow_content,
+        )
+        self.assertEqual(checkout_shas, [APPROVED_CHECKOUT_SHA] * 3)
+        self.assertEqual(
+            self.verify_workflow_content.count("persist-credentials: false"),
+            len(checkout_shas),
+        )
+        self.assertIn(
+            "python3 -m unittest discover -s tests -v",
+            self.verify_workflow_content,
+        )
+        self.assertIn(
+            "reviewdog/action-actionlint@50842263c20a7c46bd0065b9e624d3c569db061e",
+            self.verify_workflow_content,
+        )
+        self.assertIn(
+            "zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054",
+            self.verify_workflow_content,
+        )
+        self.assertIn("inputs: .github/workflows pypi/action.yml", self.verify_workflow_content)
+        self.assertIn("collect: workflows,actions", self.verify_workflow_content)
+        self.assertIn("persona: pedantic", self.verify_workflow_content)
+        self.assertIn("version: 1.29.0", self.verify_workflow_content)
+        self.assertIn("online-audits: false", self.verify_workflow_content)
+        self.assertIn("advanced-security: false", self.verify_workflow_content)
+        self.assertIn("annotations: true", self.verify_workflow_content)
 
 
 if __name__ == "__main__":
