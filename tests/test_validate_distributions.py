@@ -379,7 +379,12 @@ class DistributionValidationTests(unittest.TestCase):
             ACTIONS_ID_TOKEN_REQUEST_URL="https://oidc.example.invalid/token",
             ACTIONS_ID_TOKEN_REQUEST_TOKEN="sensitive-oidc-request-token",
         )
-        for arguments in ((), ("dist", "--unknown-option")):
+        for arguments in (
+            (),
+            ("--help",),
+            ("dist", "--repository", "https://upload.pypi.org/legacy/"),
+            ("dist", "--unknown-option"),
+        ):
             with self.subTest(arguments=arguments):
                 result = subprocess.run(
                     [sys.executable, str(VALIDATOR), *arguments],

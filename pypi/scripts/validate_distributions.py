@@ -137,7 +137,7 @@ def validate(
 
 
 def main(argv: list[str]) -> None:
-    parser = ValidationArgumentParser()
+    parser = ValidationArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("packages_dir")
     parser.add_argument(
         "--repository-url",
