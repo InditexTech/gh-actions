@@ -1,0 +1,23 @@
+.github/workflows/verify.yml
+  s_69d0abb7b821b9::t_e8bf896b0b55e5 1,12-15,18,22-24,32,35-37,42-61
+README.md
+  s_69d0abb7b821b9::t_01cc32b8e11957 3-16
+tests/test_action_contract.py
+  s_69d0abb7b821b9::t_0330db0c68d9ed 12,15,20-21,26,32,38-41,44-47,51,53,68-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "c1a07959e645639edbbe26f0d370eb12090e537d",
+  "prompts": {},
+  "sessions": {
+    "s_69d0abb7b821b9": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d7e61e7c-a3c9-4158-baf1-b429ef36cbe6",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
