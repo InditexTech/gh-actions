@@ -31,6 +31,11 @@ def fail(message: str) -> Never:
     raise SystemExit(1)
 
 
+class ValidationArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> Never:
+        fail(f"invalid arguments: {message}")
+
+
 def resolve_within_workspace(raw_path: str, workspace: Path) -> Path:
     if not raw_path:
         fail("packages-dir must not be empty")
@@ -129,7 +134,7 @@ def validate(
 
 
 def main(argv: list[str]) -> None:
-    parser = argparse.ArgumentParser()
+    parser = ValidationArgumentParser()
     parser.add_argument("packages_dir")
     parser.add_argument(
         "--repository-url",

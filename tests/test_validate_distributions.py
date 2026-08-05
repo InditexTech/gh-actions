@@ -335,3 +335,29 @@ class DistributionValidationTests(unittest.TestCase):
             result.stderr.startswith("Distribution validation failed: "),
             result.stderr,
         )
+
+    def test_argument_errors_use_the_same_failure_contract(self) -> None:
+        environment = dict(
+            os.environ,
+            GITHUB_WORKSPACE=os.getcwd(),
+            ACTIONS_ID_TOKEN_REQUEST_URL="https://oidc.example.invalid/token",
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN="sensitive-oidc-request-token",
+        )
+        for arguments in ((), ("dist", "--unknown-option")):
+            with self.subTest(arguments=arguments):
+                result = subprocess.run(
+                    [sys.executable, str(VALIDATOR), *arguments],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertTrue(
+                    result.stderr.startswith(
+                        "Distribution validation failed: invalid arguments:"
+                    ),
+                    result.stderr,
+                )
+                self.assertNotIn("sensitive-oidc-request-token", result.stderr)
