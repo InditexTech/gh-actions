@@ -311,6 +311,22 @@ class DistributionValidationTests(unittest.TestCase):
         self.assertIn("path is not a directory", file_result.stderr)
         self.assertIn("packages-dir must not be empty", empty_path.stderr)
 
+    @unittest.skipUnless(hasattr(os, "symlink"), "symlinks require POSIX")
+    def test_unresolvable_workspace_uses_the_failure_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            loop = Path(temporary_directory) / "loop"
+            loop.symlink_to(loop)
+            result = self.run_validator(loop, "dist")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn(
+            "Distribution validation failed: "
+            "GITHUB_WORKSPACE could not be resolved",
+            result.stderr,
+        )
+        self.assertNotIn("Traceback", result.stderr)
+
     @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO entries require POSIX")
     def test_rejects_non_regular_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

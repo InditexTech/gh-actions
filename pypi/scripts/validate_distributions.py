@@ -152,6 +152,8 @@ def main(argv: list[str]) -> None:
         workspace = Path(workspace_value).resolve(strict=True)
     except FileNotFoundError:
         fail(f"GITHUB_WORKSPACE does not exist: {workspace_value}")
+    except (OSError, RuntimeError) as error:
+        fail(f"GITHUB_WORKSPACE could not be resolved: {workspace_value}: {error}")
     if not workspace.is_dir():
         fail(f"GITHUB_WORKSPACE is not a directory: {workspace}")
 
