@@ -57,6 +57,7 @@ runs:
         printf '%s' "$CI_GPG_SECRET_KEY" | gpg --batch --import
 
     - name: Prepare ephemeral publish configuration
+      id: publish_config
       shell: bash
       env:
         WORKING_DIRECTORY: ${{ inputs.working-directory }}
@@ -68,12 +69,16 @@ runs:
           --pom "$GITHUB_WORKSPACE/$WORKING_DIRECTORY/pom.xml" \
           --settings "$settings" \
           --auto-publish "$AUTO_PUBLISH"
-        echo "MAVEN_CENTRAL_SETTINGS=$settings" >> "$GITHUB_ENV"
+        # Hand the settings path to the publish step via a step output rather
+        # than GITHUB_ENV: the value never becomes an ambient env var for
+        # unrelated steps (avoids the zizmor github-env code-execution sink).
+        echo "settings=$settings" >> "$GITHUB_OUTPUT"
 
     - name: Publish to Maven Central
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
+        MAVEN_CENTRAL_SETTINGS: ${{ steps.publish_config.outputs.settings }}
         PACKAGES: ${{ inputs.packages }}
       run: |
         set -euo pipefail
