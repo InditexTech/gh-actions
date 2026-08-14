@@ -1,0 +1,19 @@
+maven-central/README.md
+  s_13ef540189e70a::t_7959511578282e 1-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "8dcb6152d23afc4e6936c51251b5445b0483d1b0",
+  "prompts": {},
+  "sessions": {
+    "s_13ef540189e70a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ffbe6-2e0c-7c91-84be-ffa22333871f",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
