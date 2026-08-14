@@ -1,0 +1,90 @@
+# SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+name: Publish a Maven reactor to Maven Central
+description: >-
+  Sign and publish a checked-out Maven reactor to the Central Portal with the
+  governed central-publishing and GPG plugins, injected only for this deploy so
+  the consumer pom.xml stays free of publish plumbing.
+inputs:
+  working-directory:
+    description: >-
+      Reactor root relative to the workspace (the parent pom.xml lives here).
+    required: true
+  project-type:
+    description: Governed layout of the reactor, either 'single' or 'monorepo'.
+    required: true
+  packages:
+    description: >-
+      Comma-separated released module directories for an independent monorepo
+      release. Empty publishes the whole reactor (single and locked-step).
+    required: false
+    default: ''
+  strategy:
+    description: >-
+      Publish strategy. Only 'maven-central-gpg' is implemented; 'oidc' is a
+      reserved seam and is rejected until it ships.
+    required: false
+    default: maven-central-gpg
+  auto-publish:
+    description: >-
+      Exact boolean. 'true' releases automatically once the Portal validates the
+      bundle; 'false' stops at a validated deployment awaiting a manual release.
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Validate publish boundary
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        PROJECT_TYPE: ${{ inputs.project-type }}
+        STRATEGY: ${{ inputs.strategy }}
+        PACKAGES: ${{ inputs.packages }}
+        AUTO_PUBLISH: ${{ inputs.auto-publish }}
+      run: >-
+        python3 "$GITHUB_ACTION_PATH/scripts/validate_publish.py"
+        --working-directory "$WORKING_DIRECTORY"
+        --project-type "$PROJECT_TYPE"
+        --strategy "$STRATEGY"
+        --packages "$PACKAGES"
+        --auto-publish "$AUTO_PUBLISH"
+
+    - name: Import signing key
+      shell: bash
+      run: |
+        set -euo pipefail
+        printf '%s' "$CI_GPG_SECRET_KEY" | gpg --batch --import
+
+    - name: Prepare ephemeral publish configuration
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        AUTO_PUBLISH: ${{ inputs.auto-publish }}
+      run: |
+        set -euo pipefail
+        settings="$RUNNER_TEMP/maven-central-settings.xml"
+        python3 "$GITHUB_ACTION_PATH/scripts/inject_publish_pom.py" \
+          --pom "$GITHUB_WORKSPACE/$WORKING_DIRECTORY/pom.xml" \
+          --settings "$settings" \
+          --auto-publish "$AUTO_PUBLISH"
+        echo "MAVEN_CENTRAL_SETTINGS=$settings" >> "$GITHUB_ENV"
+
+    - name: Publish to Maven Central
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      run: |
+        set -euo pipefail
+        # The GPG plugin reads the passphrase from MAVEN_GPG_PASSPHRASE; the
+        # value stays in the process environment and is never written to disk.
+        export MAVEN_GPG_PASSPHRASE="$CI_GPG_SECRET_KEY_PASSWORD"
+        args=(--batch-mode --no-transfer-progress -DskipTests -s "$MAVEN_CENTRAL_SETTINGS")
+        selected="${PACKAGES// /}"
+        if [[ -n "$selected" ]]; then
+          # Independent release: publish only the released reactor modules; each
+          # inherits the injected central-publishing extension from the parent.
+          args+=(-pl "$selected")
+        fi
+        mvn "${args[@]}" deploy

@@ -12,6 +12,7 @@ from pathlib import Path
 APPROVED_CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 ROOT = Path(__file__).resolve().parents[1]
 ACTION = ROOT / "pypi" / "action.yml"
+MAVEN_CENTRAL_ACTION = ROOT / "maven-central" / "action.yml"
 ACTION_README = ROOT / "pypi" / "README.md"
 VERIFY_WORKFLOW = ROOT / ".github" / "workflows" / "verify.yml"
 EXPECTED_INPUTS = {
@@ -70,8 +71,14 @@ class PublishActionContractTests(unittest.TestCase):
         self.assertNotIn("\noutputs:", self.action_content)
         self.assertIn("The action has no outputs", self.action_readme_content)
 
-    def test_catalog_contains_one_cohesive_runtime_action(self) -> None:
-        self.assertEqual(sorted(ROOT.glob("*/action.yml")), [ACTION])
+    def test_catalog_contains_only_the_known_cohesive_runtime_actions(self) -> None:
+        # The catalog holds exactly the two governed publishing actions; each
+        # keeps only its own runtime scripts and introduces no dependency
+        # manifest, so the wrappers stay stdlib-only.
+        self.assertEqual(
+            sorted(ROOT.glob("*/action.yml")),
+            [MAVEN_CENTRAL_ACTION, ACTION],
+        )
         self.assertEqual(
             sorted(
                 path
@@ -79,6 +86,17 @@ class PublishActionContractTests(unittest.TestCase):
                 if path.is_file()
             ),
             [ROOT / "pypi" / "scripts" / "validate_distributions.py"],
+        )
+        self.assertEqual(
+            sorted(
+                path
+                for path in (ROOT / "maven-central" / "scripts").glob("*")
+                if path.is_file()
+            ),
+            [
+                ROOT / "maven-central" / "scripts" / "inject_publish_pom.py",
+                ROOT / "maven-central" / "scripts" / "validate_publish.py",
+            ],
         )
         self.assertFalse(list(ROOT.glob("**/package-lock.json")))
         self.assertFalse(list(ROOT.glob("**/requirements*.txt")))
@@ -159,7 +177,7 @@ class PublishActionContractTests(unittest.TestCase):
             r"uses:\s+actions/checkout@([0-9a-f]{40})\b",
             self.verify_workflow_content,
         )
-        self.assertEqual(checkout_shas, [APPROVED_CHECKOUT_SHA] * 4)
+        self.assertEqual(checkout_shas, [APPROVED_CHECKOUT_SHA] * 5)
         self.assertEqual(
             self.verify_workflow_content.count("persist-credentials: false"),
             len(checkout_shas),
@@ -170,7 +188,7 @@ class PublishActionContractTests(unittest.TestCase):
         )
         self.assertEqual(
             self.verify_workflow_content.count("runs-on: ubuntu-24.04"),
-            4,
+            5,
         )
         self.assertIn("ACTION_VALIDATOR_VERSION: 0.9.0", self.verify_workflow_content)
         self.assertIn(
@@ -178,9 +196,16 @@ class PublishActionContractTests(unittest.TestCase):
             "9f42f94fca5b8d04c13bccfbb331104b37a9250650d89ae58dc888d46206f9b9",
             self.verify_workflow_content,
         )
+        # Both catalog actions are syntax-validated and exercised as fail-closed
+        # local preflights.
+        self.assertIn('"$binary" maven-central/action.yml', self.verify_workflow_content)
         self.assertIn('"$binary" pypi/action.yml', self.verify_workflow_content)
         self.assertIn("uses: ./pypi", self.verify_workflow_content)
-        self.assertIn('[[ "$PREFLIGHT_OUTCOME" == "failure" ]]', self.verify_workflow_content)
+        self.assertIn("uses: ./maven-central", self.verify_workflow_content)
+        self.assertEqual(
+            self.verify_workflow_content.count('[[ "$PREFLIGHT_OUTCOME" == "failure" ]]'),
+            2,
+        )
         self.assertIn(
             "reviewdog/action-actionlint@50842263c20a7c46bd0065b9e624d3c569db061e",
             self.verify_workflow_content,
@@ -189,7 +214,10 @@ class PublishActionContractTests(unittest.TestCase):
             "zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054",
             self.verify_workflow_content,
         )
-        self.assertIn("inputs: .github/workflows pypi/action.yml", self.verify_workflow_content)
+        self.assertIn(
+            "inputs: .github/workflows maven-central/action.yml pypi/action.yml",
+            self.verify_workflow_content,
+        )
         self.assertIn("collect: workflows,actions", self.verify_workflow_content)
         self.assertIn("persona: pedantic", self.verify_workflow_content)
         self.assertIn("version: 1.29.0", self.verify_workflow_content)
