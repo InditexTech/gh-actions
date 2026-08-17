@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   contracts:
-    name: Local PyPI action contracts
+    name: Local action catalog contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -36,14 +36,17 @@ jobs:
             --output "$binary"
           echo "$ACTION_VALIDATOR_SHA256  $binary" | sha256sum --check
           chmod 0755 "$binary"
+          "$binary" maven-central/action.yml
           "$binary" pypi/action.yml
           "$binary" .github/workflows/verify.yml
 
-      - name: Compile and test runtime validator
+      - name: Compile and test runtime validators
         shell: bash
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile \
+            maven-central/scripts/inject_publish_pom.py \
+            maven-central/scripts/validate_publish.py \
             pypi/scripts/validate_distributions.py
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
@@ -78,6 +81,44 @@ jobs:
           set -euo pipefail
           [[ "$PREFLIGHT_OUTCOME" == "failure" ]]
 
+  local-action-maven-central:
+    name: Local Maven Central composite preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create inert reactor fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p code
+          printf '%s\n' \
+            '<project xmlns="http://maven.apache.org/POM/4.0.0">' \
+            '  <modelVersion>4.0.0</modelVersion>' \
+            '  <groupId>com.inditextech</groupId>' \
+            '  <artifactId>preflight</artifactId>' \
+            '  <version>0.0.0</version>' \
+            '</project>' > code/pom.xml
+
+      - name: Reject publishing without signing and publish credentials
+        id: missing-credentials
+        continue-on-error: true
+        uses: ./maven-central
+        with:
+          working-directory: code
+          project-type: single
+
+      - name: Assert local action failed closed
+        env:
+          PREFLIGHT_OUTCOME: ${{ steps.missing-credentials.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PREFLIGHT_OUTCOME" == "failure" ]]
+
   actionlint:
     name: GitHub Actions syntax
     runs-on: ubuntu-24.04
@@ -106,7 +147,7 @@ jobs:
           persist-credentials: false
       - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
-          inputs: .github/workflows pypi/action.yml
+          inputs: .github/workflows maven-central/action.yml pypi/action.yml
           collect: workflows,actions
           online-audits: false
           persona: pedantic
