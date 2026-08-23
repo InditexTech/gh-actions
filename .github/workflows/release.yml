@@ -1,0 +1,213 @@
+name: Release verified shared actions
+
+# workflow_run is the only trigger that means "release the exact revision that CI
+# just proved on main". It is used defensively: the validate job holds
+# contents:read with no secrets and re-verifies the run conclusion, event, branch
+# and same-repository provenance as inert data before anything is trusted, and the
+# publish job never checks out repository content — it acts only on validated
+# outputs and is gated behind two org variables. See scripts/release_policy.py.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows:
+      - Verify shared actions catalog
+    branches:
+      - main
+    types:
+      - completed
+
+permissions: {}
+
+concurrency:
+  group: release-shared-actions
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release candidate as inert data
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mobile_major: ${{ steps.metadata.outputs.mobile_major }}
+      target_sha: ${{ steps.metadata.outputs.target_sha }}
+      version: ${{ steps.metadata.outputs.version }}
+    steps:
+      - name: Check out the exact tested revision as inert data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate reviewed release metadata
+        id: metadata
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_EVENT: ${{ github.event.workflow_run.event }}
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release_policy.py \
+            --target-sha "$TARGET_SHA" \
+            --workflow-conclusion "$WORKFLOW_CONCLUSION" \
+            --workflow-event "$WORKFLOW_EVENT" \
+            --workflow-branch "$WORKFLOW_BRANCH" \
+            --github-output "$GITHUB_OUTPUT"
+
+  release:
+    name: Publish immutable action release
+    needs: validate
+    if: >-
+      needs.validate.result == 'success' &&
+      vars.CI_GOVERNANCE_ACTION_RELEASE_ENABLED == 'true' &&
+      vars.CI_GOVERNANCE_ACTION_TAG_RULESET_VERIFIED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write # Create the semantic tag, fast-forward the mobile major tag, and publish the GitHub release.
+    steps:
+      - name: Publish exact semantic and mobile identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOBILE_MAJOR: ${{ needs.validate.outputs.mobile_major }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: ${{ needs.validate.outputs.target_sha }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from urllib.error import HTTPError
+          from urllib.parse import quote
+          from urllib.request import Request, urlopen
+
+          repository = os.environ["REPOSITORY"]
+          target = os.environ["TARGET_SHA"]
+          version = os.environ["VERSION"]
+          mobile = os.environ["MOBILE_MAJOR"]
+          token = os.environ["GH_TOKEN"]
+          if (
+              re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None
+              or re.fullmatch(r"[0-9a-f]{40}", target) is None
+              or re.fullmatch(r"v[1-9][0-9]*\.[0-9]+\.[0-9]+", version) is None
+              or re.fullmatch(r"v[1-9][0-9]*", mobile) is None
+          ):
+              raise SystemExit("validated release outputs are malformed")
+
+          api = "https://api.github.com"
+
+          def request(method, path, body=None, allowed=(200,)):
+              headers = {
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {token}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              data = None
+              if body is not None:
+                  data = json.dumps(body).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              try:
+                  with urlopen(
+                      Request(
+                          f"{api}/repos/{repository}{path}",
+                          data=data,
+                          headers=headers,
+                          method=method,
+                      ),
+                      timeout=30,
+                  ) as response:
+                      status = response.status
+                      payload = response.read()
+              except HTTPError as error:
+                  status = error.code
+                  payload = error.read()
+              if status not in allowed:
+                  raise SystemExit(f"GitHub API {method} {path} returned {status}")
+              return status, json.loads(payload) if payload else {}
+
+          _, main = request("GET", "/git/ref/heads/main")
+          if main["object"]["sha"] != target:
+              raise SystemExit("tested revision is no longer protected main HEAD")
+
+          tag_path = f"/git/ref/tags/{quote(version, safe='')}"
+          tag_status, tag_ref = request("GET", tag_path, allowed=(200, 404))
+          if tag_status == 404:
+              _, tag = request(
+                  "POST",
+                  "/git/tags",
+                  {
+                      "tag": version,
+                      "message": f"Verified shared actions {version}",
+                      "object": target,
+                      "type": "commit",
+                  },
+                  allowed=(201,),
+              )
+              request(
+                  "POST",
+                  "/git/refs",
+                  {"ref": f"refs/tags/{version}", "sha": tag["sha"]},
+                  allowed=(201,),
+              )
+          else:
+              if tag_ref["object"]["type"] != "tag":
+                  raise SystemExit("semantic release identity is not an annotated tag")
+              _, tag = request("GET", f"/git/tags/{tag_ref['object']['sha']}")
+              if tag["object"]["type"] != "commit" or tag["object"]["sha"] != target:
+                  raise SystemExit("semantic release tag already targets another commit")
+
+          mobile_path = f"/git/ref/tags/{quote(mobile, safe='')}"
+          mobile_status, mobile_ref = request(
+              "GET",
+              mobile_path,
+              allowed=(200, 404),
+          )
+          if mobile_status == 404:
+              request(
+                  "POST",
+                  "/git/refs",
+                  {"ref": f"refs/tags/{mobile}", "sha": target},
+                  allowed=(201,),
+              )
+          else:
+              current = mobile_ref["object"]["sha"]
+              if current != target:
+                  _, comparison = request(
+                      "GET",
+                      f"/compare/{quote(current, safe='')}..."
+                      f"{quote(target, safe='')}",
+                  )
+                  if comparison["status"] != "ahead":
+                      raise SystemExit("mobile major tag update is not fast-forward")
+                  request(
+                      "PATCH",
+                      f"/git/refs/tags/{quote(mobile, safe='')}",
+                      {"sha": target, "force": False},
+                  )
+
+          release_status, _ = request(
+              "GET",
+              f"/releases/tags/{quote(version, safe='')}",
+              allowed=(200, 404),
+          )
+          if release_status == 404:
+              request(
+                  "POST",
+                  "/releases",
+                  {
+                      "tag_name": version,
+                      "name": version,
+                      "generate_release_notes": True,
+                  },
+                  allowed=(201,),
+              )
+          PY
