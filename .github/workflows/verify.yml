@@ -37,6 +37,7 @@ jobs:
           echo "$ACTION_VALIDATOR_SHA256  $binary" | sha256sum --check
           chmod 0755 "$binary"
           "$binary" maven-central/action.yml
+          "$binary" npm/action.yml
           "$binary" pypi/action.yml
           "$binary" .github/workflows/verify.yml
 
@@ -47,6 +48,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile \
             maven-central/scripts/inject_publish_pom.py \
             maven-central/scripts/validate_publish.py \
+            npm/scripts/validate_npm_publish.py \
             pypi/scripts/validate_distributions.py
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
@@ -119,6 +121,40 @@ jobs:
           set -euo pipefail
           [[ "$PREFLIGHT_OUTCOME" == "failure" ]]
 
+  local-action-npm:
+    name: Local npm composite preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Create inert package fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p code dist
+          printf '{"name":"@inditextech/preflight","version":"0.0.0"}\n' > code/package.json
+          : > dist/inditextech-preflight-0.0.0.tgz
+
+      - name: Reject publishing without OIDC or a fallback token
+        id: missing-credentials
+        continue-on-error: true
+        uses: ./npm
+        with:
+          working-directory: code
+          project-type: single
+          artifact-directory: dist
+
+      - name: Assert local action failed closed
+        env:
+          PREFLIGHT_OUTCOME: ${{ steps.missing-credentials.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PREFLIGHT_OUTCOME" == "failure" ]]
+
   actionlint:
     name: GitHub Actions syntax
     runs-on: ubuntu-24.04
@@ -147,7 +183,7 @@ jobs:
           persist-credentials: false
       - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
-          inputs: .github/workflows maven-central/action.yml pypi/action.yml
+          inputs: .github/workflows maven-central/action.yml npm/action.yml pypi/action.yml
           collect: workflows,actions
           online-audits: false
           persona: pedantic

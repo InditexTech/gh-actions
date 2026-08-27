@@ -2,7 +2,14 @@ version: 2
 
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # One directory per external-pin slot: the workflow directory (/) plus every
+    # composite action directory that pins its own external `uses:`. Without the
+    # per-action entries the subdirectory composites' pins go uncovered.
+    directories:
+      - /
+      - /maven-central
+      - /npm
+      - /pypi
     schedule:
       interval: weekly
       day: monday
