@@ -1,0 +1,172 @@
+# SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+name: Publish pre-built npm packages
+description: >-
+  Publish already-packed npm tarballs through npm trusted publishing (OIDC),
+  falling back to an Environment-scoped NPM_TOKEN only for a brand-new package
+  that cannot yet be a registered trusted publisher.
+inputs:
+  working-directory:
+    description: Project root relative to GITHUB_WORKSPACE; the package.json or workspaces root lives here.
+    required: true
+  project-type:
+    description: Governed layout, exactly 'single' (one package) or 'workspaces' (declared members).
+    required: true
+  artifact-directory:
+    description: Directory of pre-built .tgz tarball(s) to publish, inside GITHUB_WORKSPACE or RUNNER_TEMP.
+    required: true
+  dist-tag:
+    description: npm dist-tag to publish under, exactly 'next' (snapshots) or 'latest' (releases).
+    required: false
+    default: latest
+  registry-url:
+    description: npm registry endpoint. Reserved seam for a governed private registry; defaults to the public npm registry.
+    required: false
+    default: 'https://registry.npmjs.org/'
+runs:
+  using: composite
+  steps:
+    - name: Validate npm publish boundary
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        PROJECT_TYPE: ${{ inputs.project-type }}
+        ARTIFACT_DIRECTORY: ${{ inputs.artifact-directory }}
+        DIST_TAG: ${{ inputs.dist-tag }}
+      run: >-
+        python3 "$GITHUB_ACTION_PATH/scripts/validate_npm_publish.py"
+        --working-directory "$WORKING_DIRECTORY"
+        --project-type "$PROJECT_TYPE"
+        --artifact-directory "$ARTIFACT_DIRECTORY"
+        --dist-tag "$DIST_TAG"
+
+    - name: Provision the governed Node toolchain
+      # The composite owns its toolchain so consumers never depend on the runner's
+      # drifting default Node: Node 22 (>= 22.9.0) is the floor that lets npm 11.5.1
+      # run and that npm trusted publishing requires. No registry-url here -- auth
+      # config is the composite-owned temporary userconfig written at publish time.
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: '22'
+
+    - name: Ensure npm supports trusted publishing
+      shell: bash
+      env:
+        REQUIRED_NPM: 11.5.1
+      # adhoc-packages: bootstrapping the npm CLI itself up to the trusted-publishing
+      # floor is a tool upgrade, not an application dependency -- there is no lockfile
+      # to honor, and setup-node offers no input that guarantees npm >= 11.5.1.
+      run: | # zizmor: ignore[adhoc-packages]
+        set -euo pipefail
+        current_npm="$(npm --version)"
+        if printf '%s\n%s\n' "$REQUIRED_NPM" "$current_npm" | sort -V -C; then
+          echo "npm $current_npm already satisfies >= $REQUIRED_NPM."
+        else
+          echo "Upgrading npm from $current_npm to the minimum trusted-publishing version."
+          npm install -g "npm@^${REQUIRED_NPM}"
+        fi
+        npm --version
+
+    - name: Publish pre-built tarballs
+      shell: bash
+      env:
+        DIST_TAG: ${{ inputs.dist-tag }}
+        REGISTRY_URL: ${{ inputs.registry-url }}
+        ARTIFACT_DIRECTORY: ${{ inputs.artifact-directory }}
+        # Repository visibility gates provenance. It flows in through env (never
+        # interpolated into the script body); any non-public or unknown value
+        # degrades safely to publishing without provenance rather than failing.
+        REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+        # NPM_TOKEN is inherited from the caller's job-level env (the reviewer-
+        # gated publish Environment). It is the fallback used only when a package
+        # is brand-new and cannot yet be a trusted publisher; the OIDC path needs
+        # no token. It is written only to a temporary .npmrc removed on exit and
+        # is unreachable from the unprivileged build stage.
+      run: |
+        set -euo pipefail
+
+        # Resolve to an absolute path so every tarball reference survives the cd
+        # into the isolated publish directory below, and so a relative input can
+        # never be reinterpreted against a different working directory.
+        ARTIFACT_DIRECTORY="$(cd "$ARTIFACT_DIRECTORY" 2>/dev/null && pwd)" || {
+          echo "::error title=No packages::artifact-directory is not a readable directory."
+          exit 1
+        }
+
+        # The boundary validator already proved the directory holds only regular
+        # .tgz files and that the count matches the project type.
+        mapfile -t tarballs < <(find "$ARTIFACT_DIRECTORY" -maxdepth 1 -type f -name '*.tgz' | sort)
+        if [[ ${#tarballs[@]} -eq 0 ]]; then
+          echo "::error title=No packages::No .tgz tarball found in $ARTIFACT_DIRECTORY."
+          exit 1
+        fi
+
+        # Route every publish through a temporary user-level npmrc that is never
+        # persisted: it carries only the registry and, on the token-fallback
+        # path, the auth token. A trap removes it on exit.
+        npmrc="$(mktemp)"
+        trap 'rm -f "$npmrc"' EXIT
+        chmod 600 "$npmrc"
+        printf 'registry=%s\n' "$REGISTRY_URL" >> "$npmrc"
+        export NPM_CONFIG_USERCONFIG="$npmrc"
+
+        registry_host="${REGISTRY_URL#*://}"
+        registry_host="${registry_host%%/*}"
+
+        # OIDC vs token fallback, decided the way the reference flow does: if every
+        # package already exists on the registry, trusted publishing (OIDC)
+        # applies; if any package is brand-new it cannot be a trusted publisher
+        # yet, so the whole publish uses the NPM_TOKEN fallback.
+        has_new_packages=false
+        for tarball in "${tarballs[@]}"; do
+          package_name="$(tar -xzOf "$tarball" package/package.json \
+            | node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync(0,"utf8"));if(!p.name){process.exit(3)}process.stdout.write(p.name)')"
+          if [[ -z "$package_name" ]]; then
+            echo "::error title=Bad tarball::$tarball has no package name."
+            exit 1
+          fi
+          encoded_name="${package_name//@/%40}"
+          encoded_name="${encoded_name//\//%2F}"
+          status="$(curl --silent --show-error --location \
+            --output "$RUNNER_TEMP/registry-probe.json" \
+            --write-out '%{http_code}' \
+            "${REGISTRY_URL%/}/${encoded_name}")" || status="000"
+          if [[ "$status" == "200" ]] \
+            && node -e 'const fs=require("fs");const d=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/registry-probe.json","utf8"));process.exit(d.versions&&Object.keys(d.versions).length>0?0:1)'; then
+            echo "Package $package_name already exists; trusted publishing applies."
+          else
+            echo "Package $package_name is new; the publish will use the NPM_TOKEN fallback."
+            has_new_packages=true
+          fi
+        done
+
+        # Provenance requires the OIDC path (id-token) and a public package.
+        provenance=false
+        if [[ "$has_new_packages" == "false" && "$REPOSITORY_VISIBILITY" == "public" ]]; then
+          provenance=true
+        fi
+
+        if [[ "$has_new_packages" == "true" ]]; then
+          if [[ -z "${NPM_TOKEN:-}" ]]; then
+            echo "::error title=Missing fallback credential::A brand-new package requires the Environment-scoped NPM_TOKEN, which is not set."
+            exit 1
+          fi
+          printf '//%s/:_authToken=%s\n' "$registry_host" "$NPM_TOKEN" >> "$npmrc"
+        fi
+
+        # Publish from an isolated empty directory so no consumer-provided .npmrc
+        # on the checked-out tree can redirect the registry or bind a scoped
+        # registry (e.g. an internal @scope -> JFrog mapping) away from the
+        # governed endpoint. The only npm config in scope is the composite-owned
+        # temporary userconfig written above.
+        publish_root="$(mktemp -d)"
+        cd "$publish_root"
+
+        for tarball in "${tarballs[@]}"; do
+          # --ignore-scripts: the artifact is already built; never re-run any
+          # consumer lifecycle in this privileged stage. --registry pins the
+          # target explicitly (a CLI flag beats every .npmrc) to the governed
+          # endpoint.
+          NPM_CONFIG_PROVENANCE="$provenance" \
+            npm publish "$tarball" --registry "$REGISTRY_URL" --tag "$DIST_TAG" --ignore-scripts
+        done
