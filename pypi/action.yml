@@ -1,8 +1,12 @@
 # SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
 # SPDX-License-Identifier: Apache-2.0
 
-name: Publish Python distributions to PyPI
-description: Publish pre-built Python distributions using PyPI trusted publishing.
+name: Validate Python distributions for trusted publishing
+description: >-
+  Validate a flat set of pre-built Python distributions against the PyPI
+  trusted-publishing boundary. The caller publishes the validated
+  distributions itself by invoking pypa/gh-action-pypi-publish directly as a
+  job step.
 
 inputs:
   packages-dir:
@@ -13,15 +17,15 @@ inputs:
     required: false
     default: 'https://upload.pypi.org/legacy/'
   attestations:
-    description: Whether to publish PEP 740 attestations.
+    description: Whether the caller will publish PEP 740 attestations. Validated here; forward the same value to pypa.
     required: false
     default: 'true'
   skip-existing:
-    description: Whether to tolerate already-published distribution files when resuming a release.
+    description: Whether the caller will tolerate already-published distribution files when resuming a release. Validated here; forward the same value to pypa.
     required: false
     default: 'false'
   verify-metadata:
-    description: Whether to verify distribution metadata before uploading.
+    description: Whether the caller will verify distribution metadata before uploading. Validated here; forward the same value to pypa.
     required: false
     default: 'true'
 
@@ -43,11 +47,3 @@ runs:
         --attestations "$ATTESTATIONS"
         --skip-existing "$SKIP_EXISTING"
         --verify-metadata "$VERIFY_METADATA"
-    - name: Publish distributions
-      uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
-      with:
-        attestations: ${{ inputs.attestations }}
-        packages-dir: ${{ inputs.packages-dir }}
-        repository-url: ${{ inputs.repository-url }}
-        skip-existing: ${{ inputs.skip-existing }}
-        verify-metadata: ${{ inputs.verify-metadata }}
