@@ -110,13 +110,6 @@ class PublishActionContractTests(unittest.TestCase):
         self.assertFalse(list(ROOT.glob("**/package-lock.json")))
         self.assertFalse(list(ROOT.glob("**/requirements*.txt")))
 
-    def test_uses_an_immutable_upstream_publish_action(self) -> None:
-        match = re.search(
-            r"uses:\s+pypa/gh-action-pypi-publish@([0-9a-f]{40})\b",
-            self.action_content,
-        )
-        self.assertIsNotNone(match)
-
     def test_exposes_testpypi_without_weakening_production_default(self) -> None:
         self.assertRegex(
             self.action_content,
@@ -125,19 +118,30 @@ class PublishActionContractTests(unittest.TestCase):
             r"\s+required: false\n"
             r"\s+default: 'https://upload\.pypi\.org/legacy/'",
         )
+        # The endpoint is forwarded into the validator environment; the
+        # production default is not weakened.
         self.assertIn(
-            "repository-url: ${{ inputs.repository-url }}",
+            "REPOSITORY_URL: ${{ inputs.repository-url }}",
             self.action_content,
         )
 
-    def test_validates_before_publishing_by_default(self) -> None:
+    def test_validates_distributions_without_an_embedded_publish_step(self) -> None:
+        # Publishing is the caller's responsibility: this action only runs the
+        # governed boundary validator. It must NOT nest
+        # pypa/gh-action-pypi-publish, whose runtime Docker image name mis-cases
+        # when generated from inside a composite owned by an uppercase org
+        # (InditexTech/gh-actions -> "repository name must be lowercase").
         self.assertNotIn("validate-distributions:", self.action_content)
+        # The action may name pypa in prose (to tell the caller what to invoke
+        # directly), but it must not nest it as a `uses:` step.
+        self.assertIsNone(
+            re.search(r"uses:\s*pypa/gh-action-pypi-publish", self.action_content)
+        )
+        self.assertNotIn("- name: Publish distributions", self.action_content)
         validate_step = self.action_content.index(
             "- name: Validate trusted publishing boundary"
         )
-        publish_step = self.action_content.index("- name: Publish distributions")
-        self.assertLess(validate_step, publish_step)
-        validation_block = self.action_content[validate_step:publish_step]
+        validation_block = self.action_content[validate_step:]
         self.assertNotIn("\n      if:", validation_block)
         self.assertIn(
             'python3 "$GITHUB_ACTION_PATH/scripts/validate_distributions.py"',
@@ -151,22 +155,34 @@ class PublishActionContractTests(unittest.TestCase):
         ):
             self.assertIn(fragment, validation_block)
 
-    def test_action_is_oidc_only_and_forwards_every_validated_input(self) -> None:
+    def test_action_takes_no_credentials_and_validates_every_input(self) -> None:
         self.assertNotIn("\n  password:", self.action_content)
         self.assertNotIn("\n  user:", self.action_content)
-        publish_block = self.action_content.split(
-            "- name: Publish distributions",
-            1,
-        )[1]
-        for name in EXPECTED_INPUTS:
-            self.assertIn(f"{name}: ${{{{ inputs.{name} }}}}", publish_block)
+        # Every public input is forwarded into the validator environment so the
+        # boundary check covers exactly what the caller will hand to pypa.
+        env_block = self.action_content.split("env:", 1)[1].split("run:", 1)[0]
+        env_names = {
+            "packages-dir": "PACKAGES_DIR",
+            "repository-url": "REPOSITORY_URL",
+            "attestations": "ATTESTATIONS",
+            "skip-existing": "SKIP_EXISTING",
+            "verify-metadata": "VERIFY_METADATA",
+        }
+        for name, env_var in env_names.items():
+            with self.subTest(input=name):
+                self.assertIn(f"{env_var}: ${{{{ inputs.{name} }}}}", env_block)
+        # The README documents that publishing runs directly in the caller's
+        # job, and why nesting pypa inside this composite is unsafe.
         self.assertIn("id-token: write", self.action_readme_content)
         self.assertIn("ubuntu-24.04", self.action_readme_content)
+        self.assertIn("pypa/gh-action-pypi-publish", self.action_readme_content)
         self.assertIn(
-            "does not support being\ninvoked from another composite action",
+            "repository name must be lowercase", self.action_readme_content
+        )
+        self.assertIn(
+            "does not support being invoked from another composite action",
             self.action_readme_content,
         )
-        self.assertIn("protected TestPyPI canary", self.action_readme_content)
 
     def test_all_external_actions_are_pinned_to_commit_shas(self) -> None:
         for workflow in sorted(ROOT.glob("**/*.yml")):

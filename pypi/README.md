@@ -1,8 +1,10 @@
-# PyPI publishing action
+# PyPI trusted-publishing validation action
 
-This composite action has one responsibility: publish an already-built, flat
-set of Python distributions through PyPI trusted publishing. Building and
-testing packages belong in an earlier unprivileged job.
+This composite action has one responsibility: **validate** an already-built,
+flat set of Python distributions against the PyPI trusted-publishing boundary.
+It does not publish. Building and testing packages belong in an earlier
+unprivileged job; the actual upload is performed by the caller's own job step
+(see below). The action has no outputs.
 
 ```yaml
 permissions:
@@ -21,25 +23,41 @@ jobs:
           name: python-distributions
           path: dist
 
-      - name: Publish distributions
+      # 1) Governed boundary check (this action).
+      - name: Validate distributions
         uses: InditexTech/gh-actions/pypi@<immutable-sha>
         with:
           packages-dir: dist
+          attestations: 'true'
+          skip-existing: 'true'
+          verify-metadata: 'true'
+
+      # 2) Publish directly with the upstream PyPA action — NOT nested in a
+      #    composite. Forward exactly the values validated above.
+      - name: Publish distributions
+        uses: pypa/gh-action-pypi-publish@<immutable-sha>
+        with:
+          packages-dir: dist
+          attestations: true
+          skip-existing: true
+          verify-metadata: true
 ```
 
 ## Public contract
 
-The action has no outputs and accepts exactly these inputs:
+The action has no outputs and accepts exactly these inputs. Every input is
+validated here and must be forwarded unchanged to `pypa/gh-action-pypi-publish`
+in the caller's publish step:
 
 | Input | Required | Default | Contract |
 | --- | --- | --- | --- |
 | `packages-dir` | Yes | — | Directory of pre-built distributions inside `GITHUB_WORKSPACE`. |
 | `repository-url` | No | `https://upload.pypi.org/legacy/` | Exactly the official PyPI or TestPyPI legacy endpoint. |
-| `attestations` | No | `true` | Exact boolean controlling PEP 740 attestations. |
-| `skip-existing` | No | `false` | Exact boolean controlling duplicate-file tolerance. |
-| `verify-metadata` | No | `true` | Exact boolean controlling upstream metadata verification. |
+| `attestations` | No | `true` | Exact boolean the caller will pass to PEP 740 attestations. |
+| `skip-existing` | No | `false` | Exact boolean the caller will pass for duplicate-file tolerance. |
+| `verify-metadata` | No | `true` | Exact boolean the caller will pass for upstream metadata verification. |
 
-Validation is mandatory and fails before publication when:
+Validation is mandatory and fails the job before any publish step runs when:
 
 - `id-token: write` is unavailable;
 - a boolean is not exactly `true` or `false`;
@@ -52,21 +70,32 @@ The validator never reads or logs the OIDC request token. The caller remains
 responsible for selecting the intended package names before creating the
 artifact; file extensions alone cannot establish package ownership.
 
+## Why the publish step is not part of this action
+
+The upstream `pypa/gh-action-pypi-publish` action generates and runs a
+Docker-based action at runtime. When it is invoked from **inside another
+composite action**, GitHub derives the generated image name from the enclosing
+composite's repository — here `InditexTech/gh-actions` — and rejects it with
+`docker: invalid reference format: repository name must be lowercase`. The
+project also does not support being invoked from another composite action as
+part of its public compatibility contract.
+
+An earlier revision wrapped the PyPA publish step inside this composite and
+gated it behind a protected TestPyPI canary in `internal-ops`. That canary
+proved the nested-composite path fails, so publishing was moved out: callers
+invoke `pypa/gh-action-pypi-publish` **directly as a job step**, where the
+generated image name derives from the lowercase upstream repository and the
+casing failure cannot occur.
+
+Un-nesting does not affect OIDC. A composite runs inline in the caller's job, so
+the trusted-publisher `workflow_ref` binding was always the caller's workflow
+file; moving the publish step out of this composite leaves that binding
+unchanged. The Node OIDC POC separately confirmed that an external composite
+preserves the consumer workflow's `job_workflow_ref`.
+
 ## Support boundary
 
-Only GitHub-hosted GNU/Linux jobs are supported because the pinned upstream
-PyPA publisher uses Docker. Self-hosted runners, job containers, reusable
-workflow publication, building in the privileged publish job, and non-PyPI
-indices are outside this action's contract.
-
-The upstream `pypa/gh-action-pypi-publish` project does not support being
-invoked from another composite action. InditexTech keeps this narrow wrapper as
-a governed exception because it performs no build or dependency installation
-and is used only in an isolated OIDC publish job. The exact nested-composite
-path must pass the protected TestPyPI canary in `internal-ops` before a new
-wrapper commit is promoted to consumers.
-
-OIDC itself is not the uncertainty: an external composite action was proven to
-preserve the consumer workflow's `job_workflow_ref` and publish successfully in
-the Node registry POC. The protected PyPI canary exists to prove the additional
-PyPA nesting behavior.
+Only GitHub-hosted GNU/Linux jobs are supported for the downstream PyPA publish
+step, which uses Docker. Self-hosted runners, job containers, reusable-workflow
+publication, building in the privileged publish job, and non-PyPI indices are
+outside this action's contract.
