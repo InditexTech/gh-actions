@@ -1,0 +1,14 @@
+.github/action-release.json
+  h_e3804906c674bd 3,8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "91c86b6fc0d445050d5bae227089e2f01a6fd2aa",
+  "prompts": {},
+  "humans": {
+    "h_e3804906c674bd": {
+      "author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
