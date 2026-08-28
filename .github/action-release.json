@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
-  "version": "v1.0.0",
+  "version": "v1.1.0",
   "mobile_major": "v1",
   "legacy_v1_commit": "789b0957f48f9b0923d64995a8dedc1a3cae60f2",
   "actions": [
     "maven-central",
+    "npm",
     "pypi"
   ],
   "minimum_hardened_commits": [
