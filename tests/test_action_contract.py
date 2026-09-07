@@ -264,7 +264,7 @@ class PublishActionContractTests(unittest.TestCase):
             self.verify_workflow_content,
         )
         self.assertIn(
-            "zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054",
+            "zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99",
             self.verify_workflow_content,
         )
         self.assertIn(
