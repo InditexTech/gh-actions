@@ -1,0 +1,25 @@
+maven-central/TESTING.md
+  s_1dd531913aa7ca::t_6c9a9a97c2cb4d 19
+maven-central/scripts/inject_publish_pom.py
+  s_1dd531913aa7ca::t_0942f484ca1a60 47
+tests/test_inject_publish_pom.py
+  s_1dd531913aa7ca::t_de4ae486100700 116
+tests/test_maven_central_contract.py
+  s_1dd531913aa7ca::t_80039d9d831ddd 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ef1a32f433adeab9f298c0f6cd9c1ab6e7593259",
+  "prompts": {},
+  "sessions": {
+    "s_1dd531913aa7ca": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_1dd531913aa7ca",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
