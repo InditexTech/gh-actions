@@ -1,0 +1,23 @@
+maven-central/README.md
+  s_f8854f517a5c90::t_6acff69ee19986 58
+maven-central/action.yml
+  s_f8854f517a5c90::t_0fe601c30d4565 30-31,83,89-100
+tests/test_maven_central_contract.py
+  s_f8854f517a5c90::t_f9f23ffaa9180f 118-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a6c5ae6575dc427a5d708e8f1418bdbff1a3ca40",
+  "prompts": {},
+  "sessions": {
+    "s_f8854f517a5c90": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_f8854f517a5c90",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
