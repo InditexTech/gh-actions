@@ -113,7 +113,7 @@ class InjectPublishPomTests(unittest.TestCase):
 
         central = _find_plugin(pom_text, "central-publishing-maven-plugin")
         self.assertEqual(_text(central, "groupId"), "org.sonatype.central")
-        self.assertEqual(_text(central, "version"), "0.5.0")
+        self.assertEqual(_text(central, "version"), "0.11.0")
         self.assertEqual(_text(central, "extensions"), "true")
         self.assertEqual(_text(central, "configuration/publishingServerId"), "central")
         self.assertEqual(_text(central, "configuration/autoPublish"), "true")

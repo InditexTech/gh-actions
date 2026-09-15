@@ -24,7 +24,7 @@ EXPECTED_INPUTS = {
 # The governed publish mechanism is pinned inside the action (gh-actions owns
 # runtime pins), mirroring the profile's plugin-management versions.
 GOVERNED_PLUGIN_VERSIONS = {
-    "central-publishing-maven-plugin": "0.5.0",
+    "central-publishing-maven-plugin": "0.11.0",
     "maven-gpg-plugin": "3.2.5",
 }
 REQUIRED_CREDENTIAL_ENV = (

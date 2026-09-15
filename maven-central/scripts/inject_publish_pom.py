@@ -44,7 +44,7 @@ from typing import NoReturn
 # plugin-management, kept here so the composite is self-contained.
 CENTRAL_PUBLISHING_GROUP_ID = "org.sonatype.central"
 CENTRAL_PUBLISHING_ARTIFACT_ID = "central-publishing-maven-plugin"
-CENTRAL_PUBLISHING_VERSION = "0.5.0"
+CENTRAL_PUBLISHING_VERSION = "0.11.0"
 GPG_GROUP_ID = "org.apache.maven.plugins"
 GPG_ARTIFACT_ID = "maven-gpg-plugin"
 GPG_VERSION = "3.2.5"
