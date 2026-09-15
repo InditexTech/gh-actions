@@ -115,6 +115,20 @@ class MavenCentralContractTests(unittest.TestCase):
         # extension; the action must run `mvn ... deploy`, never a bare goal.
         self.assertRegex(self.action_content, r"mvn \"\$\{args\[@\]\}\" deploy")
         self.assertNotIn(":publish", self.action_content)
+        self.assertIn(
+            "AUTO_PUBLISH: ${{ inputs.auto-publish }}",
+            self.action_content,
+        )
+        self.assertIn('"-DautoPublish=$AUTO_PUBLISH"', self.action_content)
+        self.assertIn('"-DwaitUntil=$wait_until"', self.action_content)
+        self.assertRegex(
+            self.action_content,
+            r'wait_until=validated\n'
+            r'\s+if \[\[ "\$AUTO_PUBLISH" == "true" \]\]; then\n'
+            r'\s+wait_until=published\n'
+            r'\s+fi\n'
+            r'\s+args=\(',
+        )
 
     def test_signing_passphrase_stays_in_the_process_environment(self) -> None:
         self.assertIn(
