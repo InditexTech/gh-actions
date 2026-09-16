@@ -56,6 +56,7 @@ The action has no outputs and accepts exactly these inputs:
 | `packages` | No | — | Comma-separated released module directories for an independent monorepo release. Empty publishes the whole reactor. |
 | `strategy` | No | `maven-central-gpg` | Only `maven-central-gpg` is implemented; `oidc` is a reserved seam and is rejected until it ships. |
 | `auto-publish` | No | `true` | Exact boolean. `true` releases automatically and waits until the Portal reports the bundle published; `false` stops at a validated deployment. |
+| `extra-maven-arguments` | No | — | Newline-delimited Maven arguments appended literally to the governed deploy command. |
 
 Credentials are **not** action inputs. The caller sets them on the publish
 job's environment from organization secrets, and the action reads them from the

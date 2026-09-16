@@ -20,6 +20,7 @@ EXPECTED_INPUTS = {
     "packages": {"required": "false", "default": ""},
     "strategy": {"required": "false", "default": "maven-central-gpg"},
     "auto-publish": {"required": "false", "default": "true"},
+    "extra-maven-arguments": {"required": "false", "default": ""},
 }
 # The governed publish mechanism is pinned inside the action (gh-actions owns
 # runtime pins), mirroring the profile's plugin-management versions.
@@ -129,6 +130,11 @@ class MavenCentralContractTests(unittest.TestCase):
             r'\s+fi\n'
             r'\s+args=\(',
         )
+        self.assertIn(
+            'EXTRA_MAVEN_ARGUMENTS: ${{ inputs.extra-maven-arguments }}',
+            self.action_content,
+        )
+        self.assertIn('args+=("$argument")', self.action_content)
 
     def test_signing_passphrase_stays_in_the_process_environment(self) -> None:
         self.assertIn(

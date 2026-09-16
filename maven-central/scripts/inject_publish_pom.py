@@ -109,6 +109,20 @@ def _existing_plugin_ids(plugins: ElementTree.Element, namespace: str) -> set[st
     return ids
 
 
+def _set_existing_plugin_version(
+    plugins: ElementTree.Element, namespace: str, artifact_id: str, version: str
+) -> bool:
+    changed = False
+    for plugin in plugins.findall(_qualify(namespace, "plugin")):
+        if _child_text(plugin, namespace, "artifactId") != artifact_id:
+            continue
+        version_element = _ensure_child(plugin, namespace, "version")
+        if version_element.text != version:
+            version_element.text = version
+            changed = True
+    return changed
+
+
 def _append_central_publishing(
     plugins: ElementTree.Element, namespace: str, *, auto_publish: str
 ) -> None:
@@ -186,6 +200,13 @@ def inject_into_pom(pom_path: Path, *, auto_publish: str) -> bool:
     if CENTRAL_PUBLISHING_ARTIFACT_ID not in present:
         _append_central_publishing(plugins, namespace, auto_publish=auto_publish)
         changed = True
+    else:
+        changed = _set_existing_plugin_version(
+            plugins,
+            namespace,
+            CENTRAL_PUBLISHING_ARTIFACT_ID,
+            CENTRAL_PUBLISHING_VERSION,
+        )
     if GPG_ARTIFACT_ID not in present:
         _append_gpg(plugins, namespace)
         changed = True
