@@ -1,0 +1,23 @@
+maven-central/scripts/inject_publish_pom.py
+  s_cf6d4cb6a6caeb::t_e8f8f00a5aba80 112-123,127,129-145,227,230
+tests/test_inject_publish_pom.py
+  s_cf6d4cb6a6caeb::t_71c1607278bd04 161,173-176
+tests/test_maven_central_contract.py
+  s_cf6d4cb6a6caeb::t_f9f691a13bd82a 8-9,141-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "30b3764696f1833271dc895ee5f5cd64b3d1cbae",
+  "prompts": {},
+  "sessions": {
+    "s_cf6d4cb6a6caeb": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_cf6d4cb6a6caeb",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
