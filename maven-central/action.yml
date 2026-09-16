@@ -31,6 +31,12 @@ inputs:
       reports the bundle published; 'false' stops at a validated deployment.
     required: false
     default: 'true'
+  extra-maven-arguments:
+    description: >-
+      Newline-delimited Maven arguments appended literally to the governed
+      deploy command.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -81,6 +87,7 @@ runs:
         MAVEN_CENTRAL_SETTINGS: ${{ steps.publish_config.outputs.settings }}
         PACKAGES: ${{ inputs.packages }}
         AUTO_PUBLISH: ${{ inputs.auto-publish }}
+        EXTRA_MAVEN_ARGUMENTS: ${{ inputs.extra-maven-arguments }}
       run: |
         set -euo pipefail
         # The GPG plugin reads the passphrase from MAVEN_GPG_PASSPHRASE; the
@@ -104,4 +111,9 @@ runs:
           # inherits the injected central-publishing extension from the parent.
           args+=(-pl "$selected")
         fi
+        while IFS= read -r argument; do
+          if [[ -n "$argument" ]]; then
+            args+=("$argument")
+          fi
+        done <<< "$EXTRA_MAVEN_ARGUMENTS"
         mvn "${args[@]}" deploy

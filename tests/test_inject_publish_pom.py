@@ -57,6 +57,17 @@ BARE_PARENT_POM = """\
 </project>
 """
 
+LEGACY_CENTRAL_POM = NAMESPACED_POM.replace(
+    "    </plugins>",
+    """\
+      <plugin>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>${central-publishing-plugin.version}</version>
+      </plugin>
+    </plugins>""",
+)
+
 
 def _q(local: str) -> str:
     return f"{{{POM_NS}}}{local}"
@@ -146,6 +157,23 @@ class InjectPublishPomTests(unittest.TestCase):
 
         self.assertEqual(_text(central, "configuration/autoPublish"), "false")
         self.assertEqual(_text(central, "configuration/waitUntil"), "validated")
+
+    def test_normalizes_existing_central_publishing_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pom = root / "pom.xml"
+            pom.write_text(LEGACY_CENTRAL_POM, encoding="utf-8")
+            settings = root / "settings.xml"
+
+            result = self.run_injector(pom, settings)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            central = _find_plugin(pom.read_text(encoding="utf-8"), "central-publishing-maven-plugin")
+
+        self.assertEqual(_text(central, "version"), "0.11.0")
+        self.assertEqual(_text(central, "extensions"), "true")
+        self.assertEqual(_text(central, "configuration/publishingServerId"), "central")
+        self.assertEqual(_text(central, "configuration/autoPublish"), "true")
+        self.assertEqual(_text(central, "configuration/waitUntil"), "published")
 
     def test_creates_build_and_plugins_when_absent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

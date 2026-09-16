@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,6 +22,7 @@ EXPECTED_INPUTS = {
     "packages": {"required": "false", "default": ""},
     "strategy": {"required": "false", "default": "maven-central-gpg"},
     "auto-publish": {"required": "false", "default": "true"},
+    "extra-maven-arguments": {"required": "false", "default": ""},
 }
 # The governed publish mechanism is pinned inside the action (gh-actions owns
 # runtime pins), mirroring the profile's plugin-management versions.
@@ -129,6 +132,48 @@ class MavenCentralContractTests(unittest.TestCase):
             r'\s+fi\n'
             r'\s+args=\(',
         )
+        self.assertIn(
+            'EXTRA_MAVEN_ARGUMENTS: ${{ inputs.extra-maven-arguments }}',
+            self.action_content,
+        )
+        self.assertIn('args+=("$argument")', self.action_content)
+
+    def test_appends_extra_maven_arguments_literally(self) -> None:
+        publish_section = self.action_content.split(
+            "    - name: Publish to Maven Central\n", 1
+        )[1]
+        run_block = publish_section.split("      run: |\n", 1)[1]
+        script = "\n".join(
+            line[8:] for line in run_block.splitlines() if line.startswith("        ")
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            captured = root / "mvn-arguments"
+            maven = root / "mvn"
+            maven.write_text(
+                f"#!/bin/bash\nprintf '%s\\n' \"$@\" > {captured}\n",
+                encoding="utf-8",
+            )
+            maven.chmod(0o755)
+            result = subprocess.run(
+                ["/bin/bash", "-e", "-c", script],
+                check=False,
+                capture_output=True,
+                text=True,
+                env={
+                    "AUTO_PUBLISH": "true",
+                    "CI_GPG_SECRET_KEY_PASSWORD": "secret",
+                    "EXTRA_MAVEN_ARGUMENTS": "-Drelease.note=two words\n-Dpath=C:\\tool",
+                    "MAVEN_CENTRAL_SETTINGS": "/tmp/settings.xml",
+                    "PACKAGES": "",
+                    "PATH": f"{root}:{Path('/usr/bin')}:{Path('/bin')}",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            arguments = captured.read_text(encoding="utf-8").splitlines()
+
+        self.assertIn("-Drelease.note=two words", arguments)
+        self.assertIn(r"-Dpath=C:\tool", arguments)
 
     def test_signing_passphrase_stays_in_the_process_environment(self) -> None:
         self.assertIn(
