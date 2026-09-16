@@ -109,17 +109,40 @@ def _existing_plugin_ids(plugins: ElementTree.Element, namespace: str) -> set[st
     return ids
 
 
-def _set_existing_plugin_version(
-    plugins: ElementTree.Element, namespace: str, artifact_id: str, version: str
+def _set_child_text(
+    parent: ElementTree.Element, namespace: str, local: str, text: str
+) -> bool:
+    child = _ensure_child(parent, namespace, local)
+    if child.text == text:
+        return False
+    child.text = text
+    return True
+
+
+def _normalize_existing_central_publishing(
+    plugins: ElementTree.Element, namespace: str, *, auto_publish: str
 ) -> bool:
     changed = False
     for plugin in plugins.findall(_qualify(namespace, "plugin")):
-        if _child_text(plugin, namespace, "artifactId") != artifact_id:
+        if _child_text(plugin, namespace, "artifactId") != CENTRAL_PUBLISHING_ARTIFACT_ID:
             continue
-        version_element = _ensure_child(plugin, namespace, "version")
-        if version_element.text != version:
-            version_element.text = version
-            changed = True
+        changed |= _set_child_text(
+            plugin, namespace, "version", CENTRAL_PUBLISHING_VERSION
+        )
+        changed |= _set_child_text(plugin, namespace, "extensions", "true")
+        configuration = _ensure_child(plugin, namespace, "configuration")
+        changed |= _set_child_text(
+            configuration, namespace, "publishingServerId", PUBLISHING_SERVER_ID
+        )
+        changed |= _set_child_text(
+            configuration, namespace, "autoPublish", auto_publish
+        )
+        changed |= _set_child_text(
+            configuration,
+            namespace,
+            "waitUntil",
+            "published" if auto_publish == "true" else "validated",
+        )
     return changed
 
 
@@ -201,11 +224,10 @@ def inject_into_pom(pom_path: Path, *, auto_publish: str) -> bool:
         _append_central_publishing(plugins, namespace, auto_publish=auto_publish)
         changed = True
     else:
-        changed = _set_existing_plugin_version(
+        changed = _normalize_existing_central_publishing(
             plugins,
             namespace,
-            CENTRAL_PUBLISHING_ARTIFACT_ID,
-            CENTRAL_PUBLISHING_VERSION,
+            auto_publish=auto_publish,
         )
     if GPG_ARTIFACT_ID not in present:
         _append_gpg(plugins, namespace)

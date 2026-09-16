@@ -158,7 +158,7 @@ class InjectPublishPomTests(unittest.TestCase):
         self.assertEqual(_text(central, "configuration/autoPublish"), "false")
         self.assertEqual(_text(central, "configuration/waitUntil"), "validated")
 
-    def test_updates_existing_central_publishing_plugin_version(self) -> None:
+    def test_normalizes_existing_central_publishing_plugin(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             pom = root / "pom.xml"
@@ -170,6 +170,10 @@ class InjectPublishPomTests(unittest.TestCase):
             central = _find_plugin(pom.read_text(encoding="utf-8"), "central-publishing-maven-plugin")
 
         self.assertEqual(_text(central, "version"), "0.11.0")
+        self.assertEqual(_text(central, "extensions"), "true")
+        self.assertEqual(_text(central, "configuration/publishingServerId"), "central")
+        self.assertEqual(_text(central, "configuration/autoPublish"), "true")
+        self.assertEqual(_text(central, "configuration/waitUntil"), "published")
 
     def test_creates_build_and_plugins_when_absent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
