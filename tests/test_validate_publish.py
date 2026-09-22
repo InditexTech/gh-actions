@@ -368,6 +368,23 @@ class PublishBoundaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output.read_text(encoding="utf-8"), "\n")
 
+    def test_untransferable_nested_module_names_fail_closed(self) -> None:
+        for parent_name in ("a,b", "a b"):
+            with self.subTest(parent_name=parent_name):
+                with tempfile.TemporaryDirectory() as temporary:
+                    workspace = Path(temporary)
+                    _seed_module(workspace / "code")
+                    _seed_module(workspace / "code" / parent_name / "b")
+
+                    result = self.run_validator(
+                        workspace, project_type="monorepo", packages="b"
+                    )
+
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(
+                    "characters that cannot be carried", result.stderr
+                )
+
     def test_requires_github_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)

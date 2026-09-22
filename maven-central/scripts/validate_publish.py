@@ -48,6 +48,7 @@ IMPLEMENTED_STRATEGY = "maven-central-gpg"
 RESERVED_STRATEGIES = frozenset({"oidc"})
 BOOLEAN_INPUTS = frozenset({"true", "false"})
 PACKAGE_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+RESOLVED_PATH_PATTERN = re.compile(r"[A-Za-z0-9._/-]+\Z")
 _MODULE_SEPARATOR = ","
 
 
@@ -205,6 +206,12 @@ def validate_packages(
         if module_pom.is_symlink() or not module_pom.is_file():
             fail(f"package is not a Maven module: {entry!r}")
         resolved.append(module.relative_to(reactor).as_posix())
+    for path in resolved:
+        if not RESOLVED_PATH_PATTERN.fullmatch(path):
+            fail(
+                "resolved module directory contains characters that cannot be "
+                f"carried to the publish step: {path!r}"
+            )
     return tuple(resolved)
 
 
