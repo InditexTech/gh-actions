@@ -15,10 +15,10 @@ inputs:
     required: true
   packages:
     description: >-
-    Comma-separated released module artifactIds for an independent monorepo
-    release; each is resolved to its unique reactor module directory (flat or
-    nested) before publishing. Empty publishes the whole reactor (single and
-    locked-step).
+      Comma-separated released module artifactIds for an independent monorepo
+      release; each is resolved to its unique reactor module directory (flat or
+      nested) before publishing. Empty publishes the whole reactor (single and
+      locked-step).
     required: false
     default: ''
   strategy:
