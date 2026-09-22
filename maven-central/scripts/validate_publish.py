@@ -22,6 +22,14 @@ allowed to proceed:
   modules (``code/<group>/<name>/``), the unique nested directory with that
   name; build outputs (``target/``) are never candidates. Resolve-by-name keeps
   the published descriptor artifactId-keyed while the boundary stays path-safe.
+* The selection written for ``mvn -pl`` includes the reactor root (by
+  ``:artifactId``) plus every intermediate ancestor of each released module, so
+  the Central bundle carries each published POM's full parent chain. Maven
+  Central resolves an uploaded POM's inherited metadata (url, license, scm,
+  developers) purely from the POMs in the same deployment: without the root and
+  the ancestor aggregators every released module reports missing inherited
+  metadata and the deployment is rejected. An ancestor without a ``pom.xml``
+  fails closed instead of producing a partial bundle.
 
 Any violation exits ``1`` with the stable ``Publish validation failed:`` prefix
 and an empty stdout, mirroring the PyPI boundary validator's contract.
@@ -32,6 +40,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 from typing import Mapping, NoReturn
 
@@ -198,21 +207,54 @@ def validate_packages(
     if project_type != "monorepo":
         fail("packages may only be supplied for a monorepo release")
     working_directory = reactor.relative_to(workspace).as_posix()
-    resolved: list[str] = []
+    resolved: list[str] = [f":{_reactor_root_artifact_id(reactor)}"]
     for entry in entries:
         _validate_package_name(entry)
         module = _resolve_package_module(entry, reactor, workspace, working_directory)
         module_pom = module / "pom.xml"
         if module_pom.is_symlink() or not module_pom.is_file():
             fail(f"package is not a Maven module: {entry!r}")
-        resolved.append(module.relative_to(reactor).as_posix())
+        relative_parts = module.relative_to(reactor).parts
+        for depth in range(1, len(relative_parts)):
+            ancestor = Path(*relative_parts[:depth])
+            ancestor_pom = reactor / ancestor / "pom.xml"
+            if ancestor_pom.is_symlink() or not ancestor_pom.is_file():
+                fail(
+                    "released module has an ancestor outside the reactor: every "
+                    f"intermediate ancestor needs a pom.xml, {ancestor.as_posix()} has none"
+                )
+            ancestor_path = ancestor.as_posix()
+            if ancestor_path not in resolved:
+                resolved.append(ancestor_path)
+        resolved.append(Path(*relative_parts).as_posix())
     for path in resolved:
-        if not RESOLVED_PATH_PATTERN.fullmatch(path):
+        if not RESOLVED_PATH_PATTERN.fullmatch(path.lstrip(":")):
             fail(
                 "resolved module directory contains characters that cannot be "
                 f"carried to the publish step: {path!r}"
             )
-    return tuple(resolved)
+    return tuple(dict.fromkeys(resolved))
+
+
+def _reactor_root_artifact_id(reactor: Path) -> str:
+    pom = reactor / "pom.xml"
+    try:
+        root = ElementTree.parse(pom).getroot()
+    except ElementTree.ParseError as error:
+        fail(f"reactor pom.xml is not well-formed XML: {error}")
+    artifact = next(
+        (child.text for child in root if child.tag.split('}', 1)[-1] == "artifactId"),
+        None,
+    )
+    if artifact is None or not artifact.strip():
+        fail("reactor pom.xml does not declare an artifactId")
+    artifact = artifact.strip()
+    if not PACKAGE_NAME_PATTERN.fullmatch(artifact) or artifact in {".", ".."}:
+        fail(
+            "reactor artifactId cannot be referenced by the publish step: "
+            f"{artifact!r}"
+        )
+    return artifact
 
 
 def validate(
