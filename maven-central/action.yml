@@ -15,8 +15,10 @@ inputs:
     required: true
   packages:
     description: >-
-      Comma-separated released module directories for an independent monorepo
-      release. Empty publishes the whole reactor (single and locked-step).
+      Comma-separated released module artifactIds for an independent monorepo
+      release; each is resolved to its unique reactor module directory (flat or
+      nested) before publishing. Empty publishes the whole reactor (single and
+      locked-step).
     required: false
     default: ''
   strategy:
@@ -55,6 +57,7 @@ runs:
         --strategy "$STRATEGY"
         --packages "$PACKAGES"
         --auto-publish "$AUTO_PUBLISH"
+        --output "$RUNNER_TEMP/maven-central-resolved-packages.txt"
 
     - name: Import signing key
       shell: bash
@@ -105,10 +108,20 @@ runs:
           "-DwaitUntil=$wait_until"
           -s "$MAVEN_CENTRAL_SETTINGS"
         )
-        selected="${PACKAGES// /}"
+        selected=""
+        if [[ -s "$RUNNER_TEMP/maven-central-resolved-packages.txt" ]]; then
+          # Independent release: publish only the released reactor modules, as
+          # their validator-resolved reactor-relative module paths (nested
+          # reactors included). This file is empty when no packages were given.
+          selected="$(tr -d ' \r\n\t' < "$RUNNER_TEMP/maven-central-resolved-packages.txt")"
+        elif [[ -n "${PACKAGES// /}" ]]; then
+          # The boundary validator is pinned to the same action revision and
+          # always writes the resolved file, so this is unreachable-by-design;
+          # fail loudly instead of silently publishing the whole reactor.
+          echo "resolved packages file is missing after validation" >&2
+          exit 1
+        fi
         if [[ -n "$selected" ]]; then
-          # Independent release: publish only the released reactor modules; each
-          # inherits the injected central-publishing extension from the parent.
           args+=(-pl "$selected")
         fi
         while IFS= read -r argument; do

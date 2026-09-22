@@ -45,6 +45,7 @@ class PublishBoundaryTests(unittest.TestCase):
         auto_publish: str = "true",
         credentials: dict[str, str] | None = None,
         include_workspace: bool = True,
+        output: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         environment = {
             key: value
@@ -54,21 +55,24 @@ class PublishBoundaryTests(unittest.TestCase):
         if include_workspace:
             environment["GITHUB_WORKSPACE"] = str(workspace)
         environment.update(CREDENTIALS if credentials is None else credentials)
+        arguments = [
+            sys.executable,
+            str(VALIDATOR),
+            "--working-directory",
+            working_directory,
+            "--project-type",
+            project_type,
+            "--strategy",
+            strategy,
+            "--packages",
+            packages,
+            "--auto-publish",
+            auto_publish,
+        ]
+        if output is not None:
+            arguments.extend(["--output", str(output)])
         return subprocess.run(
-            [
-                sys.executable,
-                str(VALIDATOR),
-                "--working-directory",
-                working_directory,
-                "--project-type",
-                project_type,
-                "--strategy",
-                strategy,
-                "--packages",
-                packages,
-                "--auto-publish",
-                auto_publish,
-            ],
+            arguments,
             check=False,
             capture_output=True,
             text=True,
@@ -241,6 +245,145 @@ class PublishBoundaryTests(unittest.TestCase):
         self.assertIn("single reactor module directory", nested.stderr)
         self.assertEqual(non_module.returncode, 1)
         self.assertIn("is not a Maven module", non_module.stderr)
+
+    def test_accepts_a_nested_monorepo_by_artifact_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "scs-outbox-libs" / "scs-outbox-archive")
+            _seed_module(
+                workspace / "code" / "scs-outbox-starters" / "scs-outbox-jdbc-starter"
+            )
+
+            result = self.run_validator(
+                workspace,
+                project_type="monorepo",
+                packages="scs-outbox-archive, scs-outbox-jdbc-starter",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNoSecretLeak(result)
+
+    def test_nested_artifact_id_is_ambiguous_when_duplicated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "core")
+            _seed_module(workspace / "code" / "plugins" / "core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId is ambiguous", result.stderr)
+
+    def test_nested_artifact_id_inside_build_output_is_not_a_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "core" / "target" / "core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
+
+    def test_unknown_artifact_id_fails_with_an_actionable_message(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "orders-api")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="billing-core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
+
+    def test_invalid_artifact_id_characters_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "orders-api")
+
+            space = self.run_validator(
+                workspace, project_type="monorepo", packages="orders api"
+            )
+            traversal = self.run_validator(
+                workspace, project_type="monorepo", packages="libs/../orders-api"
+            )
+
+        self.assertEqual(space.returncode, 1)
+        self.assertIn("artifactId directory name", space.stderr)
+        self.assertEqual(traversal.returncode, 1)
+        self.assertIn("single reactor module directory", traversal.stderr)
+
+    def test_flattened_directory_without_pom_resolves_to_nested_module(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            (workspace / "code" / "core").mkdir()
+            _seed_module(workspace / "code" / "libs" / "core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNoSecretLeak(result)
+
+    def test_resolved_module_output_writes_reactor_relative_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "scs-outbox-archive")
+            _seed_module(workspace / "code" / "scs-outbox-core")
+            output = workspace.parent / "resolved-packages.txt"
+
+            result = self.run_validator(
+                workspace,
+                project_type="monorepo",
+                packages="scs-outbox-archive,scs-outbox-core",
+                output=output,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output.read_text(encoding="utf-8"),
+            "libs/scs-outbox-archive,scs-outbox-core\n",
+        )
+
+    def test_resolved_module_output_empty_for_whole_reactor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            output = workspace.parent / "resolved-packages.txt"
+
+            result = self.run_validator(workspace, output=output)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output.read_text(encoding="utf-8"), "\n")
+
+    def test_untransferable_nested_module_names_fail_closed(self) -> None:
+        for parent_name in ("a,b", "a b"):
+            with self.subTest(parent_name=parent_name):
+                with tempfile.TemporaryDirectory() as temporary:
+                    workspace = Path(temporary)
+                    _seed_module(workspace / "code")
+                    _seed_module(workspace / "code" / parent_name / "b")
+
+                    result = self.run_validator(
+                        workspace, project_type="monorepo", packages="b"
+                    )
+
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(
+                    "characters that cannot be carried", result.stderr
+                )
 
     def test_requires_github_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
