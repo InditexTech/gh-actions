@@ -1,0 +1,20 @@
+maven-central/action.yml
+  h_e3804906c674bd 18-21,60,111-123
+maven-central/scripts/validate_publish.py
+  h_e3804906c674bd 51,193,196,200,207-208,220,229-232,241-254,262,285
+tests/test_maven_central_contract.py
+  h_e3804906c674bd 170,179-256
+tests/test_validate_publish.py
+  h_e3804906c674bd 48,58-73,75,339-370
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "00ad99c9bf59a873ddbe65ef45de0373a572ac5a",
+  "prompts": {},
+  "humans": {
+    "h_e3804906c674bd": {
+      "author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
