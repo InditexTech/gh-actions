@@ -16,8 +16,12 @@ allowed to proceed:
   seam is rejected with a distinct, actionable message so a caller cannot
   silently fall through to an unsigned path;
 * ``packages`` (the released modules of an independent monorepo release) name
-  real Maven modules inside the reactor, never an absolute path, a parent
-  traversal, or a symlink.
+  Maven modules inside the reactor by their artifactId directory name, never an
+  absolute path, a parent traversal, a symlink, or an ambiguous name. A name may
+  match the reactor's flat member (``code/<name>/``) or, when the reactor nests
+  modules (``code/<group>/<name>/``), the unique nested directory with that
+  name; build outputs (``target/``) are never candidates. Resolve-by-name keeps
+  the published descriptor artifactId-keyed while the boundary stays path-safe.
 
 Any violation exits ``1`` with the stable ``Publish validation failed:`` prefix
 and an empty stdout, mirroring the PyPI boundary validator's contract.
@@ -31,6 +35,8 @@ import sys
 from pathlib import Path
 from typing import Mapping, NoReturn
 
+import re
+
 REQUIRED_CREDENTIALS = (
     "MAVEN_CENTRAL_USERNAME",
     "MAVEN_CENTRAL_PASSWORD",
@@ -41,6 +47,7 @@ VALID_PROJECT_TYPES = frozenset({"single", "monorepo"})
 IMPLEMENTED_STRATEGY = "maven-central-gpg"
 RESERVED_STRATEGIES = frozenset({"oidc"})
 BOOLEAN_INPUTS = frozenset({"true", "false"})
+PACKAGE_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 
 
 def fail(message: str) -> NoReturn:
@@ -77,6 +84,14 @@ def validate_strategy(strategy: str) -> None:
         fail(f"strategy must be {IMPLEMENTED_STRATEGY!r}")
 
 
+def _check_path_components(relative: Path, workspace: Path) -> None:
+    current = workspace
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            fail(f"symbolic path components are not supported: {current}")
+
+
 def resolve_within_workspace(raw_path: str, workspace: Path, *, label: str) -> Path:
     if not raw_path:
         fail(f"{label} must not be empty")
@@ -93,11 +108,7 @@ def resolve_within_workspace(raw_path: str, workspace: Path, *, label: str) -> P
     except ValueError:
         fail(f"{label} must stay inside GITHUB_WORKSPACE: {raw_path}")
 
-    current = workspace
-    for part in relative.parts:
-        current /= part
-        if current.is_symlink():
-            fail(f"symbolic path components are not supported: {current}")
+    _check_path_components(relative, workspace)
 
     try:
         resolved = lexical.resolve(strict=True)
@@ -118,6 +129,64 @@ def validate_reactor(working_directory: str, workspace: Path) -> Path:
     return reactor
 
 
+def _validate_package_name(entry: str) -> None:
+    if "\\" in entry or "/" in entry:
+        fail(f"package must be a single reactor module directory: {entry!r}")
+    if not PACKAGE_NAME_PATTERN.fullmatch(entry) or entry in {".", ".."}:
+        fail(f"package must be a Maven artifactId directory name: {entry!r}")
+
+
+def _resolve_package_module(
+    entry: str, reactor: Path, workspace: Path, working_directory: str
+) -> Path:
+    """Resolve one artifactId to its unique module directory inside the reactor.
+
+    The descriptor keys packages by Maven artifactId, which equals the module
+    directory name. Flat reactors keep working through the direct path; nested
+    reactors resolve through an exhaustive reactor-rooted pom walk that excludes
+    Maven build outputs (``target/``) and any hidden tree, and requires exactly
+    one match so a name can never publish an unintended module.
+    """
+
+    relative_working = Path(working_directory)
+    direct = reactor / entry
+    pom = direct / "pom.xml"
+    if direct.is_dir() and not pom.is_symlink() and pom.is_file():
+        return resolve_within_workspace(
+            f"{working_directory}/{entry}", workspace, label="package"
+        )
+
+    candidates: list[Path] = []
+    for candidate_pom in reactor.rglob("pom.xml"):
+        module_dir = candidate_pom.parent
+        if module_dir == reactor:
+            continue
+        parts = module_dir.relative_to(reactor).parts
+        if parts[-1] != entry:
+            continue
+        if any(part == "target" or part.startswith(".") for part in parts):
+            continue
+        candidates.append(module_dir)
+
+    if not candidates:
+        if direct.is_dir() and pom.is_symlink():
+            fail(f"symbolic path components are not supported: {pom}")
+        if direct.is_dir():
+            fail(f"package is not a Maven module: {entry!r}")
+        fail(f"package artifactId was not found in the reactor: {entry!r}")
+    if len(candidates) > 1:
+        listed = ", ".join(
+            (relative_working / c.relative_to(reactor)).as_posix()
+            for c in sorted(candidates)
+        )
+        fail(f"package artifactId is ambiguous: {entry!r} matches {listed}")
+    return resolve_within_workspace(
+        f"{working_directory}/{candidates[0].relative_to(reactor).as_posix()}",
+        workspace,
+        label="package",
+    )
+
+
 def validate_packages(
     packages: str, reactor: Path, workspace: Path, *, project_type: str
 ) -> None:
@@ -128,11 +197,8 @@ def validate_packages(
         fail("packages may only be supplied for a monorepo release")
     working_directory = reactor.relative_to(workspace).as_posix()
     for entry in entries:
-        if "/" in entry or "\\" in entry:
-            fail(f"package must be a single reactor module directory: {entry!r}")
-        module = resolve_within_workspace(
-            f"{working_directory}/{entry}", workspace, label="package"
-        )
+        _validate_package_name(entry)
+        module = _resolve_package_module(entry, reactor, workspace, working_directory)
         module_pom = module / "pom.xml"
         if module_pom.is_symlink() or not module_pom.is_file():
             fail(f"package is not a Maven module: {entry!r}")

@@ -242,6 +242,96 @@ class PublishBoundaryTests(unittest.TestCase):
         self.assertEqual(non_module.returncode, 1)
         self.assertIn("is not a Maven module", non_module.stderr)
 
+    def test_accepts_a_nested_monorepo_by_artifact_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "scs-outbox-libs" / "scs-outbox-archive")
+            _seed_module(
+                workspace / "code" / "scs-outbox-starters" / "scs-outbox-jdbc-starter"
+            )
+
+            result = self.run_validator(
+                workspace,
+                project_type="monorepo",
+                packages="scs-outbox-archive, scs-outbox-jdbc-starter",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNoSecretLeak(result)
+
+    def test_nested_artifact_id_is_ambiguous_when_duplicated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "core")
+            _seed_module(workspace / "code" / "plugins" / "core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId is ambiguous", result.stderr)
+
+    def test_nested_artifact_id_inside_build_output_is_not_a_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "core" / "target" / "core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
+
+    def test_unknown_artifact_id_fails_with_an_actionable_message(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "orders-api")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="billing-core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
+
+    def test_invalid_artifact_id_characters_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "orders-api")
+
+            space = self.run_validator(
+                workspace, project_type="monorepo", packages="orders api"
+            )
+            traversal = self.run_validator(
+                workspace, project_type="monorepo", packages="libs/../orders-api"
+            )
+
+        self.assertEqual(space.returncode, 1)
+        self.assertIn("artifactId directory name", space.stderr)
+        self.assertEqual(traversal.returncode, 1)
+        self.assertIn("single reactor module directory", traversal.stderr)
+
+    def test_flattened_directory_without_pom_resolves_to_nested_module(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            (workspace / "code" / "core").mkdir()
+            _seed_module(workspace / "code" / "libs" / "core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNoSecretLeak(result)
+
     def test_requires_github_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
