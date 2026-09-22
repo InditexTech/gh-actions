@@ -48,6 +48,7 @@ IMPLEMENTED_STRATEGY = "maven-central-gpg"
 RESERVED_STRATEGIES = frozenset({"oidc"})
 BOOLEAN_INPUTS = frozenset({"true", "false"})
 PACKAGE_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+_MODULE_SEPARATOR = ","
 
 
 def fail(message: str) -> NoReturn:
@@ -189,19 +190,22 @@ def _resolve_package_module(
 
 def validate_packages(
     packages: str, reactor: Path, workspace: Path, *, project_type: str
-) -> None:
+) -> tuple[str, ...]:
     entries = [entry.strip() for entry in packages.split(",") if entry.strip()]
     if not entries:
-        return
+        return ()
     if project_type != "monorepo":
         fail("packages may only be supplied for a monorepo release")
     working_directory = reactor.relative_to(workspace).as_posix()
+    resolved: list[str] = []
     for entry in entries:
         _validate_package_name(entry)
         module = _resolve_package_module(entry, reactor, workspace, working_directory)
         module_pom = module / "pom.xml"
         if module_pom.is_symlink() or not module_pom.is_file():
             fail(f"package is not a Maven module: {entry!r}")
+        resolved.append(module.relative_to(reactor).as_posix())
+    return tuple(resolved)
 
 
 def validate(
@@ -213,6 +217,7 @@ def validate(
     workspace: Path,
     *,
     environment: Mapping[str, str],
+    output_path: str | None = None,
 ) -> None:
     validate_credentials(environment)
     if project_type not in VALID_PROJECT_TYPES:
@@ -221,13 +226,30 @@ def validate(
     validate_strategy(strategy)
     validate_boolean("auto-publish", auto_publish)
     reactor = validate_reactor(working_directory, workspace)
-    validate_packages(packages, reactor, workspace, project_type=project_type)
+    resolved = validate_packages(packages, reactor, workspace, project_type=project_type)
+
+    if output_path:
+        _write_resolved_modules(output_path, reactor, resolved)
 
     scope = "the whole reactor" if not packages.strip() else packages.strip()
     print(
         f"Validated {project_type} publish boundary for {working_directory} "
         f"({scope}) via {strategy}"
     )
+
+
+def _write_resolved_modules(output_path: str, reactor: Path, resolved: tuple[str, ...]) -> None:
+    """Emit the reactor-relative module directory paths for the publish step.
+
+    ``mvn -pl`` accepts relative module paths, and the paths are the validator's
+    own resolution result, so Maven and the boundary validator share one module
+    identity even when a reactor nests its members.
+    """
+
+    destination = Path(output_path)
+    if destination.is_symlink() or not destination.parent.is_dir():
+        fail(f"package output is not writable inside a real directory: {output_path}")
+    destination.write_text(_MODULE_SEPARATOR.join(resolved) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str]) -> None:
@@ -237,6 +259,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument("--strategy", default=IMPLEMENTED_STRATEGY)
     parser.add_argument("--packages", default="")
     parser.add_argument("--auto-publish", default="true")
+    parser.add_argument("--output", default="")
     arguments = parser.parse_args(argv[1:])
 
     workspace_value = os.environ.get("GITHUB_WORKSPACE")
@@ -259,6 +282,7 @@ def main(argv: list[str]) -> None:
         arguments.auto_publish,
         workspace,
         environment=os.environ,
+        output_path=arguments.output or None,
     )
 
 

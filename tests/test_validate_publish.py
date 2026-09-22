@@ -45,6 +45,7 @@ class PublishBoundaryTests(unittest.TestCase):
         auto_publish: str = "true",
         credentials: dict[str, str] | None = None,
         include_workspace: bool = True,
+        output: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         environment = {
             key: value
@@ -54,21 +55,24 @@ class PublishBoundaryTests(unittest.TestCase):
         if include_workspace:
             environment["GITHUB_WORKSPACE"] = str(workspace)
         environment.update(CREDENTIALS if credentials is None else credentials)
+        arguments = [
+            sys.executable,
+            str(VALIDATOR),
+            "--working-directory",
+            working_directory,
+            "--project-type",
+            project_type,
+            "--strategy",
+            strategy,
+            "--packages",
+            packages,
+            "--auto-publish",
+            auto_publish,
+        ]
+        if output is not None:
+            arguments.extend(["--output", str(output)])
         return subprocess.run(
-            [
-                sys.executable,
-                str(VALIDATOR),
-                "--working-directory",
-                working_directory,
-                "--project-type",
-                project_type,
-                "--strategy",
-                strategy,
-                "--packages",
-                packages,
-                "--auto-publish",
-                auto_publish,
-            ],
+            arguments,
             check=False,
             capture_output=True,
             text=True,
@@ -331,6 +335,38 @@ class PublishBoundaryTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNoSecretLeak(result)
+
+    def test_resolved_module_output_writes_reactor_relative_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs" / "scs-outbox-archive")
+            _seed_module(workspace / "code" / "scs-outbox-core")
+            output = workspace.parent / "resolved-packages.txt"
+
+            result = self.run_validator(
+                workspace,
+                project_type="monorepo",
+                packages="scs-outbox-archive,scs-outbox-core",
+                output=output,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output.read_text(encoding="utf-8"),
+            "libs/scs-outbox-archive,scs-outbox-core\n",
+        )
+
+    def test_resolved_module_output_empty_for_whole_reactor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            output = workspace.parent / "resolved-packages.txt"
+
+            result = self.run_validator(workspace, output=output)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(output.read_text(encoding="utf-8"), "\n")
 
     def test_requires_github_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
