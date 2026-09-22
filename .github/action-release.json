@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "v1.1.1",
+  "version": "v1.1.4",
   "mobile_major": "v1",
   "legacy_v1_commit": "789b0957f48f9b0923d64995a8dedc1a3cae60f2",
   "actions": [
