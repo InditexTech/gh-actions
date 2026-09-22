@@ -28,9 +28,17 @@ CREDENTIALS = {
 }
 
 
-def _seed_module(module: Path) -> None:
+def _seed_module(module: Path, artifact_id: str = "mavencentral") -> None:
     module.mkdir(parents=True, exist_ok=True)
-    (module / "pom.xml").write_text("<project/>\n", encoding="utf-8")
+    if artifact_id:
+        pom = (
+            f'<project><groupId>com.example</groupId>'
+            f"<artifactId>{artifact_id}</artifactId>"
+            '<version>1</version></project>\n'
+        )
+    else:
+        pom = "<project/>\n"
+    (module / "pom.xml").write_text(pom, encoding="utf-8")
 
 
 class PublishBoundaryTests(unittest.TestCase):
@@ -250,7 +258,9 @@ class PublishBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
             _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "scs-outbox-libs")
             _seed_module(workspace / "code" / "scs-outbox-libs" / "scs-outbox-archive")
+            _seed_module(workspace / "code" / "scs-outbox-starters")
             _seed_module(
                 workspace / "code" / "scs-outbox-starters" / "scs-outbox-jdbc-starter"
             )
@@ -327,6 +337,7 @@ class PublishBoundaryTests(unittest.TestCase):
             workspace = Path(temporary)
             _seed_module(workspace / "code")
             (workspace / "code" / "core").mkdir()
+            _seed_module(workspace / "code" / "libs")
             _seed_module(workspace / "code" / "libs" / "core")
 
             result = self.run_validator(
@@ -340,6 +351,7 @@ class PublishBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
             _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs")
             _seed_module(workspace / "code" / "libs" / "scs-outbox-archive")
             _seed_module(workspace / "code" / "scs-outbox-core")
             output = workspace.parent / "resolved-packages.txt"
@@ -354,8 +366,64 @@ class PublishBoundaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             output.read_text(encoding="utf-8"),
-            "libs/scs-outbox-archive,scs-outbox-core\n",
+            ":mavencentral,libs,libs/scs-outbox-archive,scs-outbox-core\n",
         )
+
+    def test_resolved_selection_includes_every_intermediate_ancestor(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "scs-outbox-starters")
+            _seed_module(
+                workspace / "code" / "scs-outbox-starters" / "scs-outbox-jdbc-starter"
+            )
+            _seed_module(workspace / "code" / "libs")
+            _seed_module(workspace / "code" / "libs" / "core")
+            output = workspace.parent / "resolved-packages.txt"
+
+            result = self.run_validator(
+                workspace,
+                project_type="monorepo",
+                packages="scs-outbox-jdbc-starter,core",
+                output=output,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            output.read_text(encoding="utf-8"),
+            ":mavencentral,scs-outbox-starters,scs-outbox-starters/"
+            "scs-outbox-jdbc-starter,libs,libs/core\n",
+        )
+
+    def test_release_without_ancestor_pom_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs")
+            _seed_module(workspace / "code" / "libs" / "core")
+            (workspace / "code" / "libs" / "pom.xml").unlink()
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("every intermediate ancestor needs a pom.xml", result.stderr)
+
+    def test_reactor_root_without_artifact_id_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            reactor = workspace / "code"
+            reactor.mkdir()
+            (reactor / "pom.xml").write_text("<project/>", encoding="utf-8")
+            _seed_module(reactor / "libs" / "core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("does not declare an artifactId", result.stderr)
 
     def test_resolved_module_output_empty_for_whole_reactor(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -382,7 +450,10 @@ class PublishBoundaryTests(unittest.TestCase):
 
                 self.assertEqual(result.returncode, 1)
                 self.assertIn(
-                    "characters that cannot be carried", result.stderr
+                    ("every intermediate ancestor needs a pom.xml"
+                     if parent_name in ("a,b", "a b") else
+                     "characters that cannot be carried"),
+                    result.stderr,
                 )
 
     def test_requires_github_workspace(self) -> None:
