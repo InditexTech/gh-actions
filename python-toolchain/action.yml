@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: {{ CURRENT_YEAR }} INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+
+name: Set up governed Python toolchain
+description: >-
+  Restore or compile the asdf-managed CPython declared in .tool-versions,
+  point uv at it, and warm the uv package cache. Every governed Python
+  workflow replays this sequence; centralizing it keeps compilation cost on
+  a actions/cache restore whenever the declared toolchain has not changed.
+
+inputs:
+  tool-versions:
+    description: Full contents of the repository .tool-versions file.
+    required: true
+  asdf-version:
+    description: asdf release installed before the toolchain.
+    required: true
+  working-directory:
+    description: Directory whose .tool-versions declares the toolchain.
+    required: false
+    default: '.'
+  cache-dependency-glob:
+    description: Additional lockfile glob that participates in the uv cache key.
+    required: false
+    default: 'uv.lock'
+
+outputs:
+  python:
+    description: Absolute path of the asdf-managed Python interpreter.
+    value: ${{ steps.toolchain.outputs.python }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate governed tool versions
+      shell: bash
+      env:
+        TOOL_VERSIONS: ${{ inputs.tool-versions }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        if grep -Evq '^[a-zA-Z0-9_-]+ [a-zA-Z0-9._+-]+$' <<< "$TOOL_VERSIONS"; then
+          echo "::error title=Invalid tool-versions::${WORKING_DIRECTORY}/.tool-versions is malformed."
+          exit 1
+        fi
+
+    - name: Install Python build dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        # asdf compiles CPython from source; without these dev libraries the
+        # interpreter lacks _bz2/readline/_lzma and Code/Verify fails at import
+        # time (observed live on pypi-ci-testing since 2026-09-17).
+        cd /tmp
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends \
+          libbz2-dev libreadline-dev liblzma-dev libsqlite3-dev \
+          libffi-dev libssl-dev zlib1g-dev uuid-dev
+
+    - name: Restore asdf toolchain cache
+      id: toolchain-cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.asdf/downloads
+          ~/.asdf/installs/python
+        key: python-asdf-${{ runner.os }}-${{ runner.arch }}-${{ inputs.tool-versions }}
+        restore-keys: |
+          python-asdf-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Set up asdf-managed Python
+      id: toolchain
+      uses: asdf-vm/actions/install@b7bcd026f18772e44fe1026d729e1611cc435d47 # v4.0.1
+      with:
+        tool_versions: ${{ inputs.tool-versions }}
+        asdf_version: ${{ inputs.asdf-version }}
+
+    - name: Point uv at the asdf-managed interpreter
+      shell: bash
+      env:
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        echo "UV_PYTHON=$(asdf where python)/bin/python" >> "$GITHUB_ENV"
+        echo "python=$(asdf where python)/bin/python" >> "$GITHUB_OUTPUT"
+
+    - name: Set up UV
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        version: '0.9.7'
+        enable-cache: true
+        working-directory: ${{ inputs.working-directory }}
+        cache-dependency-glob: ${{ inputs.working-directory }}/${{ inputs.cache-dependency-glob }}

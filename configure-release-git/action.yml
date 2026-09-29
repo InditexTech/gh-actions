@@ -1,0 +1,51 @@
+# SPDX-FileCopyrightText: {{ CURRENT_YEAR }} INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+
+name: Configure release git signing
+description: >-
+  Configure authenticated Git and GPG signing for release commits and tags.
+  Commits and annotated tags created after this step are signed with the
+  provided key and attributed to the release automation identity.
+
+inputs:
+  token:
+    description: GitHub token used for authenticated Git operations.
+    required: true
+  gpg-secret-key:
+    description: Armored GPG secret key used to sign release commits and tags.
+    required: true
+  gpg-passphrase:
+    description: Passphrase protecting the GPG secret key.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure GitHub credentials and GPG signing
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        CI_GPG_SECRET_KEY: ${{ inputs.gpg-secret-key }}
+        CI_GPG_SECRET_KEY_PASSWORD: ${{ inputs.gpg-passphrase }}
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        git config --global credential.helper store
+        printf 'https://x-access-token:%s@github.com\n' "$GITHUB_TOKEN" > "$HOME/.git-credentials"
+
+        mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
+        printf '%s\n' 'allow-loopback-pinentry' 'allow-preset-passphrase' > ~/.gnupg/gpg-agent.conf
+        printf '%s\n' 'use-agent' 'pinentry-mode loopback' > ~/.gnupg/gpg.conf
+        gpgconf --kill gpg-agent || true
+        echo "$CI_GPG_SECRET_KEY" | gpg --batch --import
+        KEY_DATA="$(gpg --list-secret-keys --with-colons)"
+        while IFS= read -r GRIP; do
+          /usr/lib/gnupg/gpg-preset-passphrase --preset "$GRIP" <<< "$CI_GPG_SECRET_KEY_PASSWORD"
+        done < <(printf '%s\n' "$KEY_DATA" | awk -F: '$1 == "grp" { print $10 }')
+        GPG_FINGERPRINT="$(printf '%s\n' "$KEY_DATA" | awk -F: '$1 == "fpr" { print $10; exit }')"
+
+        git config --global user.name "srvcosoitxtech"
+        git config --global user.email "oso@inditex.com"
+        git config --global user.signingkey "$GPG_FINGERPRINT"
+        git config --global commit.gpgsign true
+        git config --global tag.gpgsign true
