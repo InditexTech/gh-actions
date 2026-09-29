@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ACTION = ROOT / "pypi" / "action.yml"
 MAVEN_CENTRAL_ACTION = ROOT / "maven-central" / "action.yml"
 NPM_ACTION = ROOT / "npm" / "action.yml"
+PYTHON_TOOLCHAIN_ACTION = ROOT / "python-toolchain" / "action.yml"
+CONFIGURE_RELEASE_GIT_ACTION = ROOT / "configure-release-git" / "action.yml"
 ACTION_README = ROOT / "pypi" / "README.md"
 VERIFY_WORKFLOW = ROOT / ".github" / "workflows" / "verify.yml"
 EXPECTED_INPUTS = {
@@ -73,12 +75,21 @@ class PublishActionContractTests(unittest.TestCase):
         self.assertIn("The action has no outputs", self.action_readme_content)
 
     def test_catalog_contains_only_the_known_cohesive_runtime_actions(self) -> None:
-        # The catalog holds exactly the three governed publishing actions; each
-        # keeps only its own runtime scripts and introduces no dependency
+        # The catalog holds exactly the three governed publishing actions plus
+        # the two shell-only release/toolchain composites; publishing actions
+        # keep only their own runtime scripts and introduce no dependency
         # manifest, so the wrappers stay stdlib-only.
         self.assertEqual(
             sorted(ROOT.glob("*/action.yml")),
-            [MAVEN_CENTRAL_ACTION, NPM_ACTION, ACTION],
+            sorted(
+                [
+                    ACTION,
+                    CONFIGURE_RELEASE_GIT_ACTION,
+                    MAVEN_CENTRAL_ACTION,
+                    NPM_ACTION,
+                    PYTHON_TOOLCHAIN_ACTION,
+                ]
+            ),
         )
         self.assertEqual(
             sorted(
