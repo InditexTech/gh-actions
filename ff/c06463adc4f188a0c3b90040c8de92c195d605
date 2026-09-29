@@ -1,0 +1,31 @@
+.github/dependabot.yml
+  s_f8e84dad849d19::t_98e1f612d7ca0a 13-14
+.github/workflows/verify.yml
+  s_f8e84dad849d19::t_4eda641101dbf5 42-43
+configure-release-git/action.yml
+  s_f8e84dad849d19::t_504b5079c799ab 1-51
+python-toolchain/action.yml
+  s_f8e84dad849d19::t_252521f2f31db3 1-93
+tests/test_action_contract.py
+  s_f8e84dad849d19::t_b2415d648ccbf7 17-18,78-80,84-92
+tests/test_configure_release_git_contract.py
+  s_f8e84dad849d19::t_575d0511dfbca2 1-80
+tests/test_python_toolchain_contract.py
+  s_f8e84dad849d19::t_a92710f66193ca 1-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ffc06463adc4f188a0c3b90040c8de92c195d605",
+  "prompts": {},
+  "sessions": {
+    "s_f8e84dad849d19": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "s_f8e84dad849d19",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
