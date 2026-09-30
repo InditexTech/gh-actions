@@ -57,6 +57,17 @@ runs:
           libbz2-dev libreadline-dev liblzma-dev libsqlite3-dev \
           libffi-dev libssl-dev zlib1g-dev uuid-dev
 
+    - name: Hash declared toolchain
+      id: toolchain-hash
+      env:
+        TOOL_VERSIONS: ${{ inputs.tool-versions }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The raw contents are multiline; a literal newline inside a cache key
+        # breaks lookup matching, so all cache keys see a digest instead.
+        echo "digest=$(printf '%s' "$TOOL_VERSIONS" | shasum -a 256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
     - name: Restore asdf toolchain cache
       id: toolchain-cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -64,7 +75,7 @@ runs:
         path: |
           ~/.asdf/downloads
           ~/.asdf/installs/python
-        key: python-asdf-${{ runner.os }}-${{ runner.arch }}-${{ inputs.tool-versions }}
+        key: python-asdf-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain-hash.outputs.digest }}
         restore-keys: |
           python-asdf-${{ runner.os }}-${{ runner.arch }}-
 
