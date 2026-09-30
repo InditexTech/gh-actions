@@ -39,6 +39,8 @@ jobs:
           "$binary" maven-central/action.yml
           "$binary" npm/action.yml
           "$binary" pypi/action.yml
+          "$binary" python-toolchain/action.yml
+          "$binary" configure-release-git/action.yml
           "$binary" .github/workflows/verify.yml
 
       - name: Compile and test runtime validators

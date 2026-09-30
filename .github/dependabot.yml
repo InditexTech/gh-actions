@@ -10,6 +10,8 @@ updates:
       - /maven-central
       - /npm
       - /pypi
+      - /python-toolchain
+      - /configure-release-git
     schedule:
       interval: weekly
       day: monday
