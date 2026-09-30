@@ -1,0 +1,21 @@
+python-toolchain/action.yml
+  s_0e6c01275bd3cc::t_c06dc9c138a360 62,78-90
+tests/test_python_toolchain_contract.py
+  s_0e6c01275bd3cc::t_23b11930671332 42-54,81-82,92-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "29930f705172a556e36f4628bca946e1807093ab",
+  "prompts": {},
+  "sessions": {
+    "s_0e6c01275bd3cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a8444734-1810-4534-94d7-0872a3ed77dd",
+        "model": "unknown"
+      },
+      "human_author": "ivanasabi <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
