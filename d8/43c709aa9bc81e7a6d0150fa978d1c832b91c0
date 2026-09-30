@@ -1,0 +1,19 @@
+tests/test_action_contract.py
+  s_0e6c01275bd3cc::t_91536c7b66b275 274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d843c709aa9bc81e7a6d0150fa978d1c832b91c0",
+  "prompts": {},
+  "sessions": {
+    "s_0e6c01275bd3cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a8444734-1810-4534-94d7-0872a3ed77dd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "ivanasabi <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
