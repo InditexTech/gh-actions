@@ -39,6 +39,19 @@ def _input_contract(content: str) -> dict[str, dict[str, str]]:
     return contract
 
 
+def _step_names(content: str) -> list[str]:
+    return re.findall(r"^    - name: (.+)$", content, re.MULTILINE)
+
+
+def _step(content: str, name: str) -> str:
+    return content.split(f"    - name: {name}\n", 1)[1].split("\n    - name: ", 1)[0]
+
+
+def _cache_paths(step: str) -> list[str]:
+    block = step.split("path: |\n", 1)[1]
+    return re.findall(r"^          (\S.*)$", block.split("\n        key:", 1)[0], re.M)
+
+
 class PythonToolchainContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.content = ACTION.read_text(encoding="utf-8")
@@ -65,8 +78,8 @@ class PythonToolchainContractTests(unittest.TestCase):
         self.assertIn("steps.toolchain.outputs.python", python_block)
 
     def test_toolchain_cache_is_platform_keyed(self) -> None:
-        cache_block = self.content.split("Restore asdf toolchain cache", 1)[1]
-        self.assertIn("actions/cache@", cache_block)
+        cache_block = _step(self.content, "Restore asdf toolchain cache")
+        self.assertIn("actions/cache/restore@", cache_block)
         self.assertIsNotNone(
             re.search(
                 r"key: python-asdf-\$\{\{ runner\.os \}\}-\$\{\{ runner\.arch \}\}-",
@@ -75,6 +88,30 @@ class PythonToolchainContractTests(unittest.TestCase):
         )
         self.assertIn("~/.asdf/downloads", cache_block)
         self.assertIn("~/.asdf/installs/python", cache_block)
+
+    def test_toolchain_cache_is_saved_as_soon_as_it_is_built(self) -> None:
+        # The combined actions/cache only saves in its post step when the whole
+        # job succeeds, so a release that fails after compiling never seeds the
+        # default-branch scope and every retry recompiles CPython.
+        self.assertNotRegex(self.content, r"uses:\s*actions/cache@")
+        names = _step_names(self.content)
+        self.assertLess(
+            names.index("Set up asdf-managed Python"),
+            names.index("Save asdf toolchain cache"),
+        )
+        restore = _step(self.content, "Restore asdf toolchain cache")
+        save = _step(self.content, "Save asdf toolchain cache")
+        self.assertEqual(
+            re.search(r"actions/cache/restore@([0-9a-f]{40})", restore).group(1),
+            re.search(r"actions/cache/save@([0-9a-f]{40})", save).group(1),
+        )
+        self.assertIn(
+            "if: steps.toolchain-cache.outputs.cache-hit != 'true'", save
+        )
+        self.assertIn(
+            "key: ${{ steps.toolchain-cache.outputs.cache-primary-key }}", save
+        )
+        self.assertEqual(_cache_paths(restore), _cache_paths(save))
 
     def test_pins_every_external_action_to_full_sha(self) -> None:
         for match in re.finditer(r"uses:\s*([^\s]+)@([0-9a-f]{40})", self.content):

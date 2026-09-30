@@ -59,7 +59,7 @@ runs:
 
     - name: Restore asdf toolchain cache
       id: toolchain-cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.asdf/downloads
@@ -74,6 +74,19 @@ runs:
       with:
         tool_versions: ${{ inputs.tool-versions }}
         asdf_version: ${{ inputs.asdf-version }}
+
+    # Save right after the build instead of in a post step: the combined cache
+    # action only saves when the whole job succeeds, so a release that failed
+    # after compiling never seeded the default-branch scope and every retry
+    # recompiled CPython (observed live on pypi-ci-testing, 2026-09-30).
+    - name: Save asdf toolchain cache
+      if: steps.toolchain-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.asdf/downloads
+          ~/.asdf/installs/python
+        key: ${{ steps.toolchain-cache.outputs.cache-primary-key }}
 
     - name: Point uv at the asdf-managed interpreter
       shell: bash
