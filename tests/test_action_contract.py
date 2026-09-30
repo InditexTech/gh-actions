@@ -271,7 +271,7 @@ class PublishActionContractTests(unittest.TestCase):
             3,
         )
         self.assertIn(
-            "reviewdog/action-actionlint@320fcdd9c860767cf17fab3b20e22e739d5d02b8",
+            "reviewdog/action-actionlint@2085657ab2c7f48c58edcc767fba576f63bea76b",
             self.verify_workflow_content,
         )
         self.assertIn(
