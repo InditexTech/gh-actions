@@ -1,7 +1,8 @@
 # Shared GitHub Actions
 
 This internal catalog contains the reusable runtime actions for publishing
-governed build artifacts to their language registries.
+governed build artifacts to their language registries and for computing their
+release versions.
 
 ## Available actions
 
@@ -16,6 +17,12 @@ governed build artifacts to their language registries.
   (OIDC), with an Environment-scoped `NPM_TOKEN` fallback only for a brand-new
   package and provenance enabled only when the repository is public.
   Evidence: [`npm/TESTING.md`](npm/TESTING.md).
+- `release-version/` computes the release version, release tag and next
+  development version of each released package from the highest strict
+  `X.Y.Z` release tag reachable from the checked-out `HEAD`, bumped by the
+  resolved release type. It needs a checkout with full history and tags,
+  and fails closed in a shallow clone.
+  Evidence: [`tests/test_release_version.py`](tests/test_release_version.py).
 
 The repository intentionally keeps only these actions, their runtime scripts,
 and isolated local tests for the action contracts and boundary validators.
