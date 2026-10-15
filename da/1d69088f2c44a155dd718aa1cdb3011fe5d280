@@ -1,0 +1,19 @@
+.github/action-release.json
+  s_5f27284fa3acb4::t_34ee096baf3d1f 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "da1d69088f2c44a155dd718aa1cdb3011fe5d280",
+  "prompts": {},
+  "sessions": {
+    "s_5f27284fa3acb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b5a8b28-e844-45fc-a013-2491fb555a5d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "ivanasabi <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
