@@ -98,6 +98,29 @@ def reachable_tags(prefix: str) -> list[str]:
     return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
 
 
+def ensure_complete_history() -> None:
+    """Fail closed in a shallow clone, whose missing tags would read as a first release."""
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        fail("git is not available on PATH")
+    except subprocess.CalledProcessError as error:
+        fail(f"git rev-parse --is-shallow-repository failed: {error.stderr.strip()}")
+    answer = completed.stdout.strip()
+    if answer == "true":
+        fail(
+            "the repository is a shallow clone, so release tags may be missing; "
+            "check it out with fetch-depth: 0"
+        )
+    if answer != "false":
+        fail(f"cannot tell whether the repository is a shallow clone: {answer!r}")
+
+
 def highest_release_tag(prefix: str) -> Version | None:
     pattern = re.compile(re.escape(prefix) + VERSION)
     versions = []
@@ -227,6 +250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         for package in packages
     ]
+    ensure_complete_history()
     for record in releases:
         print(
             f"Package {record['package']}: release {record['version']} as tag {record['tag']} "

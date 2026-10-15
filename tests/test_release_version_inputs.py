@@ -221,6 +221,54 @@ class EnvironmentTests(ReleaseVersionTestCase):
         self.assertNotEqual(completed.returncode, 0, completed.stdout)
         self.assertIn("::error title=Release version::GITHUB_OUTPUT is not set", completed.stdout)
 
+    def _clone(self, name: str, *options: str) -> Path:
+        destination = self.workspace / name
+        subprocess.run(
+            ["git", "clone", "--quiet", *options, self.repo.path.as_uri(), str(destination)],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=_environment(),
+        )
+        return destination
+
+    def _is_shallow(self, path: Path) -> str:
+        return subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=path,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=_environment(),
+        ).stdout.strip()
+
+    def test_shallow_clone_fails_closed(self) -> None:
+        self.repo.tag("0.2.0")
+        self.repo.commit()
+        shallow = self._clone("shallow", "--depth", "1")
+        self.assertEqual(self._is_shallow(shallow), "true")
+        output_file = self.workspace / "github-output"
+        output_file.write_text("", encoding="utf-8")
+        completed = self._run(cwd=shallow, github_output=str(output_file))
+        self.assertNotEqual(completed.returncode, 0, completed.stdout)
+        self.assertIn("::error title=Release version::", completed.stdout)
+        self.assertIn("shallow", completed.stdout)
+        self.assertNotIn("Package ", completed.stdout)
+        self.assertEqual(output_file.read_text(encoding="utf-8"), "")
+
+    def test_full_clone_reads_the_origin_tags(self) -> None:
+        self.repo.tag("0.2.0")
+        self.repo.commit()
+        full = self._clone("full")
+        self.assertEqual(self._is_shallow(full), "false")
+        output_file = self.workspace / "github-output"
+        output_file.write_text("", encoding="utf-8")
+        completed = self._run(cwd=full, github_output=str(output_file))
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        outputs = _read_outputs(output_file)
+        self.assertEqual(outputs["version"], "0.2.1")
+        self.assertEqual(outputs["tag"], "0.2.1")
+
     def test_error_message_escapes_workflow_command_characters(self) -> None:
         result = self.run_action(
             release_type="50%\nhuge", tag_format="bare", packages=[package()]

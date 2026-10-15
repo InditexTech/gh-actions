@@ -20,7 +20,8 @@ release versions.
 - `release-version/` computes the release version, release tag and next
   development version of each released package from the highest strict
   `X.Y.Z` release tag reachable from the checked-out `HEAD`, bumped by the
-  resolved release type. It needs a checkout with full history and tags.
+  resolved release type. It needs a checkout with full history and tags,
+  and fails closed in a shallow clone.
   Evidence: [`tests/test_release_version.py`](tests/test_release_version.py).
 
 The repository intentionally keeps only these actions, their runtime scripts,
