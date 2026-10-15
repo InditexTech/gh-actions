@@ -16,6 +16,7 @@ MAVEN_CENTRAL_ACTION = ROOT / "maven-central" / "action.yml"
 NPM_ACTION = ROOT / "npm" / "action.yml"
 PYTHON_TOOLCHAIN_ACTION = ROOT / "python-toolchain" / "action.yml"
 CONFIGURE_RELEASE_GIT_ACTION = ROOT / "configure-release-git" / "action.yml"
+RELEASE_VERSION_ACTION = ROOT / "release-version" / "action.yml"
 ACTION_README = ROOT / "pypi" / "README.md"
 VERIFY_WORKFLOW = ROOT / ".github" / "workflows" / "verify.yml"
 EXPECTED_INPUTS = {
@@ -75,10 +76,11 @@ class PublishActionContractTests(unittest.TestCase):
         self.assertIn("The action has no outputs", self.action_readme_content)
 
     def test_catalog_contains_only_the_known_cohesive_runtime_actions(self) -> None:
-        # The catalog holds exactly the three governed publishing actions plus
-        # the two shell-only release/toolchain composites; publishing actions
-        # keep only their own runtime scripts and introduce no dependency
-        # manifest, so the wrappers stay stdlib-only.
+        # The catalog holds exactly the three governed publishing actions, the
+        # two shell-only release/toolchain composites and the release-version
+        # computation; script-backed actions keep only their own runtime
+        # scripts and introduce no dependency manifest, so they stay
+        # stdlib-only.
         self.assertEqual(
             sorted(ROOT.glob("*/action.yml")),
             sorted(
@@ -88,6 +90,7 @@ class PublishActionContractTests(unittest.TestCase):
                     MAVEN_CENTRAL_ACTION,
                     NPM_ACTION,
                     PYTHON_TOOLCHAIN_ACTION,
+                    RELEASE_VERSION_ACTION,
                 ]
             ),
         )
@@ -117,6 +120,14 @@ class PublishActionContractTests(unittest.TestCase):
                 if path.is_file()
             ),
             [ROOT / "npm" / "scripts" / "validate_npm_publish.py"],
+        )
+        self.assertEqual(
+            sorted(
+                path
+                for path in (ROOT / "release-version" / "scripts").glob("*")
+                if path.is_file()
+            ),
+            [ROOT / "release-version" / "scripts" / "release_version.py"],
         )
         self.assertFalse(list(ROOT.glob("**/package-lock.json")))
         self.assertFalse(list(ROOT.glob("**/requirements*.txt")))

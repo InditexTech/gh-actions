@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 INDUSTRIA DE DISEÑO TEXTIL S.A. (INDITEX S.A.)
+# SPDX-License-Identifier: Apache-2.0
+name: Compute release versions from reachable tags
+description: >-
+  Compute the release version, release tag and next development version of
+  each released package from the highest strict X.Y.Z release tag reachable
+  from the checked-out HEAD, bumped by the resolved release type. With no
+  reachable tag, the declared version without its development suffix is
+  released, or 0.0.0 bumped by the release type when none is declared.
+  Requires a checkout with full history and tags.
+inputs:
+  release-type:
+    description: >-
+      Resolved release type, exactly 'major', 'minor', 'patch', 'hotfix' or
+      'multi-hotfix'; 'hotfix' and 'multi-hotfix' bump the patch.
+    required: true
+  tag-format:
+    description: >-
+      Release tag format, exactly 'v' (vX.Y.Z) or 'bare' (X.Y.Z). Supplies the
+      tag prefix only for a package whose tag-prefix is empty.
+    required: true
+  strategy:
+    description: Release strategy, exactly 'single', 'locked-step' or 'independent'.
+    required: true
+  packages:
+    description: >-
+      JSON list of {name, tag-prefix, declared-version} objects. 'single' and
+      'locked-step' pass one entry with an empty tag-prefix; 'independent'
+      passes one entry per released package, whose tag-prefix is the whole
+      literal text before X.Y.Z (for example 'core-' or 'core-v').
+    required: true
+  dev-suffix:
+    description: >-
+      Development suffix of the next development version, exactly '-SNAPSHOT',
+      '.dev0' or empty.
+    required: false
+    default: ''
+outputs:
+  releases:
+    description: >-
+      JSON array of {package, base, version, tag, next_dev, first_release,
+      declared_ahead} records, in the order of the packages input.
+    value: ${{ steps.compute.outputs.releases }}
+  version:
+    description: Release version of the first (primary) record.
+    value: ${{ steps.compute.outputs.version }}
+  tag:
+    description: Release tag of the first (primary) record.
+    value: ${{ steps.compute.outputs.tag }}
+runs:
+  using: composite
+  steps:
+    - name: Compute release versions
+      id: compute
+      shell: bash
+      env:
+        RELEASE_TYPE: ${{ inputs.release-type }}
+        TAG_FORMAT: ${{ inputs.tag-format }}
+        STRATEGY: ${{ inputs.strategy }}
+        PACKAGES: ${{ inputs.packages }}
+        DEV_SUFFIX: ${{ inputs.dev-suffix }}
+      run: >-
+        python3 "$GITHUB_ACTION_PATH/scripts/release_version.py"
+        "--release-type=$RELEASE_TYPE"
+        "--tag-format=$TAG_FORMAT"
+        "--strategy=$STRATEGY"
+        "--packages=$PACKAGES"
+        "--dev-suffix=$DEV_SUFFIX"
