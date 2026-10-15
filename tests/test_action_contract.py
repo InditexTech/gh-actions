@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -19,6 +20,7 @@ CONFIGURE_RELEASE_GIT_ACTION = ROOT / "configure-release-git" / "action.yml"
 RELEASE_VERSION_ACTION = ROOT / "release-version" / "action.yml"
 ACTION_README = ROOT / "pypi" / "README.md"
 VERIFY_WORKFLOW = ROOT / ".github" / "workflows" / "verify.yml"
+RELEASE_METADATA = ROOT / ".github" / "action-release.json"
 EXPECTED_INPUTS = {
     "packages-dir": {"required": "true"},
     "repository-url": {
@@ -131,6 +133,17 @@ class PublishActionContractTests(unittest.TestCase):
         )
         self.assertFalse(list(ROOT.glob("**/package-lock.json")))
         self.assertFalse(list(ROOT.glob("**/requirements*.txt")))
+
+    def test_release_metadata_lists_exactly_the_catalog_actions(self) -> None:
+        # scripts/release_policy.py refuses to cut a release whose reviewed
+        # metadata does not name every action directory; checking it here
+        # fails the pull request instead of the post-merge release run.
+        actions = json.loads(RELEASE_METADATA.read_text(encoding="utf-8"))["actions"]
+        self.assertEqual(actions, sorted(set(actions)))
+        self.assertEqual(
+            actions,
+            sorted(path.parent.name for path in ROOT.glob("*/action.yml")),
+        )
 
     def test_exposes_testpypi_without_weakening_production_default(self) -> None:
         self.assertRegex(
@@ -290,8 +303,8 @@ class PublishActionContractTests(unittest.TestCase):
             self.verify_workflow_content,
         )
         self.assertIn(
-            "inputs: .github/workflows maven-central/action.yml "
-            "npm/action.yml pypi/action.yml",
+            "          inputs: .github/workflows maven-central/action.yml "
+            "npm/action.yml pypi/action.yml release-version/action.yml\n",
             self.verify_workflow_content,
         )
         self.assertIn("collect: workflows,actions", self.verify_workflow_content)
