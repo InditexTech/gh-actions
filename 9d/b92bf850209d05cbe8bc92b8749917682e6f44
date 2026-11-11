@@ -1,0 +1,21 @@
+maven-central/scripts/validate_publish.py
+  s_0204f3fb835684::t_9ac1c2b66a7541 22-23,163-204,212-213,218-222
+tests/test_validate_publish.py
+  s_0204f3fb835684::t_fb396a3a68822d 44-52,292,294,409-425,502,536,544,596
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "9db92bf850209d05cbe8bc92b8749917682e6f44",
+  "prompts": {},
+  "sessions": {
+    "s_0204f3fb835684": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "16709cc7-84f9-4072-8662-90ab2bf7d0f8",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@inditex.com>"
+    }
+  }
+}
