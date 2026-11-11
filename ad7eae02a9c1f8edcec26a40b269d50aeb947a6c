@@ -1,0 +1,19 @@
+.github/workflows/verify-base-archetype.yml
+  s_1238ad889ce79e::t_0d6958a28afc6c 23,38-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ad7eae02a9c1f8edcec26a40b269d50aeb947a6c",
+  "prompts": {},
+  "sessions": {
+    "s_1238ad889ce79e": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "c9367174-461f-4cc3-bd88-8a9c2cbf7805",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

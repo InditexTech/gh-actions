@@ -1,0 +1,33 @@
+.github/workflows/verify.yml
+  s_69d0abb7b821b9::t_04ae30622626b3 19-52,58-79,83,99
+README.md
+  s_69d0abb7b821b9::t_d9a52cbd678aa7 11-13,20-22
+pypi/README.md
+  s_69d0abb7b821b9::t_f588eadb4c09c6 3-5,8-27,30-60,62-67,69-72
+pypi/TESTING.md
+  s_69d0abb7b821b9::t_f98c18f671aee7 1-29
+pypi/action.yml
+  s_69d0abb7b821b9::t_f834fed853c565 31,34,37-38,41-45
+pypi/scripts/validate_distributions.py
+  s_69d0abb7b821b9::t_840998344348b8 10,13,22-26,29,35-39,45-58,71-75,82-102,104-107,114-118,120,122,138-140,153-161
+tests/test_action_contract.py
+  s_69d0abb7b821b9::t_749abd5d6dae7f 15,17-43,49,52-85,107-110,113-114,117,119-142,162,171-183
+tests/test_validate_distributions.py
+  s_69d0abb7b821b9::t_11a601fa0c444b 26-31,33-47,55-60,71,75-91,93,126,135,139-140,157-171,193-337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "a4b0feba90abb2910f6143e442d920c23d0f1edf",
+  "prompts": {},
+  "sessions": {
+    "s_69d0abb7b821b9": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d7e61e7c-a3c9-4158-baf1-b429ef36cbe6",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

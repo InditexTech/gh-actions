@@ -1,0 +1,14 @@
+.github/CODEOWNERS
+  h_d494e0d888aecb 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ed1f6f22e0640a50769fab7a1a83f3efe628a31c",
+  "prompts": {},
+  "humans": {
+    "h_d494e0d888aecb": {
+      "author": "amagan <andreamr@ext.zara.com>"
+    }
+  }
+}

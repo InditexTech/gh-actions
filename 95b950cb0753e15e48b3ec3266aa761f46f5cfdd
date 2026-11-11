@@ -1,0 +1,29 @@
+tests/test_action_contract.py
+  s_050a00c30f9d8b::t_17d4f7349f9fb2 16,76,81,102-109,184-209,215,226,234-235,237,241,244,255-256
+tests/test_npm_contract.py
+  s_050a00c30f9d8b::t_925d351913481b 1-148
+tests/test_validate_npm_publish.py
+  s_050a00c30f9d8b::t_9945484e21b3fb 1-432
+README.md
+  s_050a00c30f9d8b::t_34458225a277c7 15-18,26-29,36-37
+.github/workflows/verify.yml
+  s_050a00c30f9d8b::t_8b43c8010f957c 40,51,124-157,186
+npm/scripts/validate_npm_publish.py
+  s_050a00c30f9d8b::t_afc4ef9c67c77e 1-221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "95b950cb0753e15e48b3ec3266aa761f46f5cfdd",
+  "prompts": {},
+  "sessions": {
+    "s_050a00c30f9d8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21a8e3da-a09f-4804-a78a-d7e3f9f0a36e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

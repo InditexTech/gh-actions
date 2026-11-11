@@ -1,0 +1,19 @@
+pypi/action.yml
+  s_69d0abb7b821b9::t_f1422f2d13b92d 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "789b0957f48f9b0923d64995a8dedc1a3cae60f2",
+  "prompts": {},
+  "sessions": {
+    "s_69d0abb7b821b9": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d7e61e7c-a3c9-4158-baf1-b429ef36cbe6",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

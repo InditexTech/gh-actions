@@ -1,0 +1,19 @@
+.github/CODEOWNERS
+  s_189ac63a888bc2::t_54470f9cbfeb77 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "30c510ece59bf5256b1e33c27ff0888a06a8e4ce",
+  "prompts": {},
+  "sessions": {
+    "s_189ac63a888bc2": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "f534e528-7410-4c91-b832-76c326786e12",
+        "model": "zai-org/GLM-5.3-Flash"
+      },
+      "human_author": "amagan <andreamr@ext.zara.com>"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+tests/test_action_contract.py
+  s_5f27284fa3acb4::t_43d59250e36590 7,23,137-147,306-307
+tests/test_release_version_contract.py
+  s_5f27284fa3acb4::t_1a19febacc510c 1-135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2dfe19ff6c612bce93ddbedde3c72f49e94ec61d",
+  "prompts": {},
+  "sessions": {
+    "s_5f27284fa3acb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b5a8b28-e844-45fc-a013-2491fb555a5d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "ivanasabi <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

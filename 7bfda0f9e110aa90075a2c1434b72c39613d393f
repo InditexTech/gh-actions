@@ -1,0 +1,19 @@
+tests/test_validate_publish.py
+  s_98a379879eb402::t_cf6230a3265bea 31,33-41,261,263,340,354,369-395,398-427,453-456
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7bfda0f9e110aa90075a2c1434b72c39613d393f",
+  "prompts": {},
+  "sessions": {
+    "s_98a379879eb402": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_f35ff6ca0ffeEkRswu4zte5ZQ8",
+        "model": "zai-org/GLM-5.3-Flash"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

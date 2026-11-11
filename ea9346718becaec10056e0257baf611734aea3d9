@@ -1,0 +1,21 @@
+base-archetype-integrity/verify_base_archetype.py
+  s_69d0abb7b821b9::t_0ede9e78d1aba7 302-303
+tests/test_base_archetype_integrity.py
+  s_69d0abb7b821b9::t_98d6d19224a4b8 92-97,242-255
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ea9346718becaec10056e0257baf611734aea3d9",
+  "prompts": {},
+  "sessions": {
+    "s_69d0abb7b821b9": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d7e61e7c-a3c9-4158-baf1-b429ef36cbe6",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+tests/test_action_contract.py
+  h_e3804906c674bd 263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fb72b784646178f4c804add3a7a36444df3afe79",
+  "prompts": {},
+  "humans": {
+    "h_e3804906c674bd": {
+      "author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

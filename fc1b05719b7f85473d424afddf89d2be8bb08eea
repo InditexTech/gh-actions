@@ -1,0 +1,16 @@
+maven-central/scripts/validate_publish.py
+  h_e3804906c674bd 19-24,38-39,50,87-94,111,132-189,200-201
+tests/test_validate_publish.py
+  h_e3804906c674bd 245-334
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fc1b05719b7f85473d424afddf89d2be8bb08eea",
+  "prompts": {},
+  "humans": {
+    "h_e3804906c674bd": {
+      "author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

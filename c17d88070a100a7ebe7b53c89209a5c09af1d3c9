@@ -1,0 +1,23 @@
+.github/action-release.json
+  s_5f27284fa3acb4::t_e550b7866c744c 11-12
+.github/workflows/verify.yml
+  s_5f27284fa3acb4::t_b6e7aa2b8b9fcb 44,55-56,190
+README.md
+  s_5f27284fa3acb4::t_ab5b6f7170f9cc 4-5,20-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c17d88070a100a7ebe7b53c89209a5c09af1d3c9",
+  "prompts": {},
+  "sessions": {
+    "s_5f27284fa3acb4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b5a8b28-e844-45fc-a013-2491fb555a5d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "ivanasabi <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

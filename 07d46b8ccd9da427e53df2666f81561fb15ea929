@@ -1,0 +1,21 @@
+pypi/scripts/validate_distributions.py
+  s_69d0abb7b821b9::t_7a72951c9b9561 34-38,137
+tests/test_validate_distributions.py
+  s_69d0abb7b821b9::t_1281620edf93c6 338-363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "07d46b8ccd9da427e53df2666f81561fb15ea929",
+  "prompts": {},
+  "sessions": {
+    "s_69d0abb7b821b9": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d7e61e7c-a3c9-4158-baf1-b429ef36cbe6",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

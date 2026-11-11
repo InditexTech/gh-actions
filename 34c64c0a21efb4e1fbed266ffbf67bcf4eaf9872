@@ -1,0 +1,21 @@
+base-archetype-sync-workflow-test/verify_sync_to_develop.py
+  s_76271006260fbc::t_8932219a2c30ca 1-729
+base-archetype-sync-workflow-test/action.yml
+  s_76271006260fbc::t_d20cd6780f09eb 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "34c64c0a21efb4e1fbed266ffbf67bcf4eaf9872",
+  "prompts": {},
+  "sessions": {
+    "s_76271006260fbc": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "call_o5NSMwgwcgbKiAesOTsxZbky",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

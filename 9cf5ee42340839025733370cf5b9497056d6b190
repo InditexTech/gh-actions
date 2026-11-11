@@ -1,0 +1,23 @@
+README.md
+  s_69d0abb7b821b9::t_1acee84e8cbf0d 9-11
+base-archetype-sync-workflow-test/verify_sync_to_develop.py
+  s_69d0abb7b821b9::t_0262e7eac18576 15,26-44,441,455,469,483,502,537,558,592,615,662,674,685,699,709
+tests/test_base_archetype_integrity.py
+  s_69d0abb7b821b9::t_a280a495ed675e 14,334-351
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "9cf5ee42340839025733370cf5b9497056d6b190",
+  "prompts": {},
+  "sessions": {
+    "s_69d0abb7b821b9": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "d7e61e7c-a3c9-4158-baf1-b429ef36cbe6",
+        "model": "unknown"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}

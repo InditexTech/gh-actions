@@ -1,0 +1,25 @@
+.github/action-release.json
+  s_0281e2f1e0b025::t_26f3b2f56ed457 1-14
+.github/workflows/release.yml
+  s_0281e2f1e0b025::t_d1139363f227e3 1-213
+scripts/release_policy.py
+  s_0281e2f1e0b025::t_4338e02b3d4557 1-150
+tests/test_release_policy.py
+  s_0281e2f1e0b025::t_1403c65c003d6c 1-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "30c256e69dff30e5bbf79e9632648c95bd9d3730",
+  "prompts": {},
+  "sessions": {
+    "s_0281e2f1e0b025": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "be5ee6de-906d-42fd-8e53-2969b9599c93",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@ext.inditex.com>"
+    }
+  }
+}
