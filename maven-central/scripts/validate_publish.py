@@ -16,12 +16,12 @@ allowed to proceed:
   seam is rejected with a distinct, actionable message so a caller cannot
   silently fall through to an unsigned path;
 * ``packages`` (the released modules of an independent monorepo release) name
-  Maven modules inside the reactor by their artifactId directory name, never an
-  absolute path, a parent traversal, a symlink, or an ambiguous name. A name may
-  match the reactor's flat member (``code/<name>/``) or, when the reactor nests
-  modules (``code/<group>/<name>/``), the unique nested directory with that
-  name; build outputs (``target/``) are never candidates. Resolve-by-name keeps
-  the published descriptor artifactId-keyed while the boundary stays path-safe.
+  Maven modules inside the reactor by their artifactId, never an absolute path,
+  a parent traversal, a symlink, or an ambiguous name. A name resolves to the
+  unique module, at any depth, whose own ``pom.xml`` declares that artifactId,
+  whatever its directory is called; only modules declared in the reactor's
+  ``<modules>`` are candidates. Resolve-by-identity keeps the published descriptor
+  artifactId-keyed while the boundary stays path-safe.
 * The selection written for ``mvn -pl`` includes the reactor root (by
   ``:artifactId``) plus every intermediate ancestor of each released module, so
   the Central bundle carries each published POM's full parent chain. Maven
@@ -144,46 +144,111 @@ def _validate_package_name(entry: str) -> None:
     if "\\" in entry or "/" in entry:
         fail(f"package must be a single reactor module directory: {entry!r}")
     if not PACKAGE_NAME_PATTERN.fullmatch(entry) or entry in {".", ".."}:
-        fail(f"package must be a Maven artifactId directory name: {entry!r}")
+        fail(f"package must be a Maven artifactId: {entry!r}")
+
+
+def _module_artifact_id(pom: Path) -> str | None:
+    """Return the artifactId a module pom declares itself, never an inherited one."""
+
+    try:
+        root = ElementTree.parse(pom).getroot()
+    except (ElementTree.ParseError, OSError):
+        return None
+    for child in root:
+        if child.tag.split("}", 1)[-1] == "artifactId":
+            return (child.text or "").strip() or None
+    return None
+
+
+def _declared_module_dir(current: Path, name: str, root: Path) -> Path | None:
+    """Return the canonical directory of one ``<module>`` entry, or None.
+
+    Symbolic components are rejected on the declaration exactly as written,
+    before any ``..`` is normalized, so the directory whose pom is read for the
+    identity check is the same one selected for publication.
+    """
+
+    walked = current
+    for part in Path(name).parts:
+        walked = walked / part
+        if part not in (".", "..") and walked.is_symlink():
+            return None
+    candidate = Path(os.path.normpath(current / name))
+    if candidate.name == "pom.xml":
+        candidate = candidate.parent
+    pom = candidate / "pom.xml"
+    if not pom.is_file() or pom.is_symlink() or not candidate.is_relative_to(root):
+        return None
+    return candidate
+
+
+def _reactor_index(reactor: Path) -> dict[str, list[Path]]:
+    """Map each artifactId to the reactor modules declaring it.
+
+    Only modules reachable from the root pom's ``<modules>`` are indexed, so
+    fixture or example poms under the tree can never create a false match. Each
+    pom is parsed once per validation.
+    """
+
+    root = Path(os.path.normpath(reactor))
+    index: dict[str, list[Path]] = {}
+    seen = {root}
+    pending = [root]
+    while pending:
+        current = pending.pop()
+        try:
+            tree = ElementTree.parse(current / "pom.xml").getroot()
+        except (ElementTree.ParseError, OSError):
+            continue
+        for modules in tree.iter():
+            if modules.tag.split("}", 1)[-1] != "modules":
+                continue
+            for module in modules:
+                name = (module.text or "").strip()
+                if not name or module.tag.split("}", 1)[-1] != "module":
+                    continue
+                candidate = _declared_module_dir(current, name, root)
+                if candidate is None or candidate in seen:
+                    continue
+                seen.add(candidate)
+                pending.append(candidate)
+                artifact_id = _module_artifact_id(candidate / "pom.xml")
+                if artifact_id:
+                    index.setdefault(artifact_id, []).append(candidate)
+    return index
 
 
 def _resolve_package_module(
-    entry: str, reactor: Path, workspace: Path, working_directory: str
+    entry: str,
+    reactor: Path,
+    workspace: Path,
+    working_directory: str,
+    index: dict[str, list[Path]],
 ) -> Path:
-    """Resolve one artifactId to its unique module directory inside the reactor.
+    """Resolve one artifactId to the unique module whose own pom declares it.
 
-    The descriptor keys packages by Maven artifactId, which equals the module
-    directory name. Flat reactors keep working through the direct path; nested
-    reactors resolve through an exhaustive reactor-rooted pom walk that excludes
-    Maven build outputs (``target/``) and any hidden tree, and requires exactly
-    one match so a name can never publish an unintended module.
+    The descriptor keys packages by Maven artifactId, which need not equal the
+    module directory name (``clients/`` may declare ``karatetools-clients``).
+    Resolution walks the modules declared by the reactor, and requires exactly
+    one whose own pom declares the entry as its artifactId. A directory that merely
+    shares the entry's name is never accepted without that identity check.
     """
 
     relative_working = Path(working_directory)
-    direct = reactor / entry
-    pom = direct / "pom.xml"
-    if direct.is_dir() and not pom.is_symlink() and pom.is_file():
-        return resolve_within_workspace(
-            f"{working_directory}/{entry}", workspace, label="package"
-        )
-
-    candidates: list[Path] = []
-    for candidate_pom in reactor.rglob("pom.xml"):
-        module_dir = candidate_pom.parent
-        if module_dir == reactor:
-            continue
-        parts = module_dir.relative_to(reactor).parts
-        if parts[-1] != entry:
-            continue
-        if any(part == "target" or part.startswith(".") for part in parts):
-            continue
-        candidates.append(module_dir)
+    candidates = index.get(entry, [])
 
     if not candidates:
+        direct = reactor / entry
+        pom = direct / "pom.xml"
         if direct.is_dir() and pom.is_symlink():
             fail(f"symbolic path components are not supported: {pom}")
-        if direct.is_dir():
+        if direct.is_dir() and not pom.is_file():
             fail(f"package is not a Maven module: {entry!r}")
+        if direct.is_dir():
+            fail(
+                f"package artifactId was not found in the reactor: {entry!r} "
+                f"(directory {entry!r} declares artifactId {_module_artifact_id(pom)!r})"
+            )
         fail(f"package artifactId was not found in the reactor: {entry!r}")
     if len(candidates) > 1:
         listed = ", ".join(
@@ -208,9 +273,12 @@ def validate_packages(
         fail("packages may only be supplied for a monorepo release")
     working_directory = reactor.relative_to(workspace).as_posix()
     resolved: list[str] = [f":{_reactor_root_artifact_id(reactor)}"]
+    index = _reactor_index(reactor)
     for entry in entries:
         _validate_package_name(entry)
-        module = _resolve_package_module(entry, reactor, workspace, working_directory)
+        module = _resolve_package_module(
+            entry, reactor, workspace, working_directory, index
+        )
         module_pom = module / "pom.xml"
         if module_pom.is_symlink() or not module_pom.is_file():
             fail(f"package is not a Maven module: {entry!r}")

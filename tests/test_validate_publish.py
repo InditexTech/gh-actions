@@ -28,8 +28,10 @@ CREDENTIALS = {
 }
 
 
-def _seed_module(module: Path, artifact_id: str = "mavencentral") -> None:
+def _seed_module(module: Path, artifact_id: str | None = None) -> None:
     module.mkdir(parents=True, exist_ok=True)
+    if artifact_id is None:
+        artifact_id = "mavencentral" if module.name == "code" else module.name
     if artifact_id:
         pom = (
             f'<project><groupId>com.example</groupId>'
@@ -39,6 +41,15 @@ def _seed_module(module: Path, artifact_id: str = "mavencentral") -> None:
     else:
         pom = "<project/>\n"
     (module / "pom.xml").write_text(pom, encoding="utf-8")
+    parent_pom = module.parent / "pom.xml"
+    if module.name != "code" and parent_pom.is_file():
+        text = parent_pom.read_text(encoding="utf-8")
+        entry = f"<module>{module.name}</module>"
+        if "</modules>" in text:
+            text = text.replace("</modules>", f"{entry}</modules>")
+        else:
+            text = text.replace("</project>", f"<modules>{entry}</modules></project>")
+        parent_pom.write_text(text, encoding="utf-8")
 
 
 class PublishBoundaryTests(unittest.TestCase):
@@ -278,7 +289,9 @@ class PublishBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
             _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs")
             _seed_module(workspace / "code" / "libs" / "core")
+            _seed_module(workspace / "code" / "plugins")
             _seed_module(workspace / "code" / "plugins" / "core")
 
             result = self.run_validator(
@@ -328,9 +341,112 @@ class PublishBoundaryTests(unittest.TestCase):
             )
 
         self.assertEqual(space.returncode, 1)
-        self.assertIn("artifactId directory name", space.stderr)
+        self.assertIn("Maven artifactId", space.stderr)
         self.assertEqual(traversal.returncode, 1)
         self.assertIn("single reactor module directory", traversal.stderr)
+
+    def test_flat_reactor_resolves_prefixed_artifact_ids_from_other_directories(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "clients", "karatetools-clients")
+            _seed_module(workspace / "code" / "boot", "karatetools-boot")
+            _seed_module(workspace / "code" / "openapi-test", "karatetools-openapi-test")
+            _seed_module(
+                workspace / "code" / "openapi-test" / "xxx-api-rest-stable",
+                "xxx-api-rest-stable",
+            )
+            output = workspace.parent / "resolved-packages.txt"
+
+            result = self.run_validator(
+                workspace,
+                project_type="monorepo",
+                packages="karatetools-clients,karatetools-boot,xxx-api-rest-stable",
+                output=output,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                output.read_text(encoding="utf-8"),
+                ":mavencentral,clients,boot,openapi-test,"
+                "openapi-test/xxx-api-rest-stable\n",
+            )
+
+    def test_directory_named_like_the_entry_with_another_artifact_id_is_rejected(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "core", "something-else")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
+        self.assertIn("something-else", result.stderr)
+
+    def test_duplicate_artifact_id_in_differently_named_directories_is_ambiguous(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "a", "shared-core")
+            _seed_module(workspace / "code" / "b", "shared-core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="shared-core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId is ambiguous", result.stderr)
+
+    def test_pom_outside_declared_modules_is_not_a_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "core")
+            fixture = workspace / "code" / "core" / "src" / "test" / "fixture"
+            fixture.mkdir(parents=True)
+            (fixture / "pom.xml").write_text(
+                "<project><artifactId>core</artifactId></project>", encoding="utf-8"
+            )
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_symlinked_module_declaration_cannot_redirect_the_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "core", "other-core")
+            _seed_module(workspace / "code" / "sibling" / "core", "core")
+            (workspace / "code" / "sibling" / "bridge").mkdir()
+            (workspace / "code" / "link").symlink_to(
+                workspace / "code" / "sibling" / "bridge"
+            )
+            root_pom = workspace / "code" / "pom.xml"
+            root_pom.write_text(
+                root_pom.read_text(encoding="utf-8").replace(
+                    "<modules>", "<modules><module>link/../core</module>"
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
 
     def test_flattened_directory_without_pom_resolves_to_nested_module(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -408,7 +524,7 @@ class PublishBoundaryTests(unittest.TestCase):
             )
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("every intermediate ancestor needs a pom.xml", result.stderr)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
 
     def test_reactor_root_without_artifact_id_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -442,6 +558,7 @@ class PublishBoundaryTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as temporary:
                     workspace = Path(temporary)
                     _seed_module(workspace / "code")
+                    _seed_module(workspace / "code" / parent_name)
                     _seed_module(workspace / "code" / parent_name / "b")
 
                     result = self.run_validator(
@@ -449,12 +566,7 @@ class PublishBoundaryTests(unittest.TestCase):
                     )
 
                 self.assertEqual(result.returncode, 1)
-                self.assertIn(
-                    ("every intermediate ancestor needs a pom.xml"
-                     if parent_name in ("a,b", "a b") else
-                     "characters that cannot be carried"),
-                    result.stderr,
-                )
+                self.assertIn("characters that cannot be carried", result.stderr)
 
     def test_requires_github_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -506,3 +618,4 @@ class PublishBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

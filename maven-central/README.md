@@ -53,7 +53,7 @@ The action has no outputs and accepts exactly these inputs:
 | --- | --- | --- | --- |
 | `working-directory` | Yes | — | Reactor root relative to `GITHUB_WORKSPACE`; the parent `pom.xml` lives here. |
 | `project-type` | Yes | — | Exactly `single` or `monorepo`. |
-| `packages` | No | — | Comma-separated released module directories for an independent monorepo release. Empty publishes the whole reactor. |
+| `packages` | No | — | Comma-separated released module artifactIds (resolved by each module pom's own `<artifactId>`, not its directory name) for an independent monorepo release. Empty publishes the whole reactor. |
 | `strategy` | No | `maven-central-gpg` | Only `maven-central-gpg` is implemented; `oidc` is a reserved seam and is rejected until it ships. |
 | `auto-publish` | No | `true` | Exact boolean. `true` releases automatically and waits until the Portal reports the bundle published; `false` stops at a validated deployment. |
 | `extra-maven-arguments` | No | — | Newline-delimited Maven arguments appended literally to the governed deploy command. |
@@ -85,7 +85,8 @@ Validation is mandatory and fails before any signing or publication when:
 - `working-directory` escapes the workspace, is absolute, or contains a symbolic
   path component, or the reactor has no `pom.xml`;
 - `packages` is supplied for a `single` project, or names anything other than a
-  single-segment reactor module directory that contains a `pom.xml`.
+  Maven artifactId declared by exactly one reactor module `pom.xml` (unknown or
+  duplicated artifactIds are rejected).
 
 The validator never reads or logs any credential value.
 
