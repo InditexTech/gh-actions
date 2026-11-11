@@ -1,0 +1,4 @@
+version: 1
+store_id: cac-inditextech
+store_change_id: maven-central-artifactid
+repo: gh-actions

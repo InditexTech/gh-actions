@@ -1,0 +1,29 @@
+schema: spec-driven
+
+# OpenSpec root of gh-actions (shared composite actions). Changes with a shared contract live in
+# the cac-inditextech store; this repository carries its local change.
+context: |
+  Language: English. Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+  Read AGENTS.md and TESTING.md, then the workspace rules aicontext/memory/engine.md.
+  Every implementation task ends with a Done when: part made of runnable commands or observable
+  checks; mark tasks needing a live environment, a remote pipeline or a person as [manual].
+  Never plan branch, push, pull-request or merge steps.
+  Planning does not authorize implementation, live actions, pushes or merges.
+
+# Per-operation guidance: judged Apply and Archive (workspace judged flow).
+operations:
+  apply:
+    guidance:
+      - "Run aidev-feature-judge plan-check before Apply; a blocked or human_review_required result stops Apply."
+      - "Implement through the aidev-judged-apply skill. Applying in place with custom agents: orchestrated mode (AIDevTaskImplementer per task, a fresh AIDevTaskJudge after it, tick a task only after a PASS logged in judge-log.md). Inside a delegated Apply unit: unit mode, and include 'Judge: pending' in the workflow result."
+      - "Tasks marked [manual] are not implemented by an agent: ask the user for the observed result."
+      - "When the same gate failure persists after two fix attempts, run aidev-debug (change-owned, read-only) and include its diagnosis when you stop and ask."
+      - "At the local change close, present every harness learning candidate through aidev-harness-learning and record the user's decision in harness-learning-candidates.md."
+      - "Gates come from the repository's AGENTS.md and aicontext/memory/workspace-openspec-workflow.md (Gates); never weaken a test, threshold or baseline to pass them."
+  archive:
+    guidance:
+      - "Before archiving, run aidev-judged-apply's scripts/check-judge-log.py <local-change-dir> --for archive; archive only when it exits 0 (every task ticked with its PASS or manual entry, a final change-mode PASS, every harness learning proposal decided)."
+      - "Archive the store change, or a single-repository change, only after aidev-feature-judge final-check passes."
+
+references:
+  - { id: cac-inditextech, remote: "https://github.com/InditexTech/cac-inditextech.git" }

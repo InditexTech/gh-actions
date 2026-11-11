@@ -28,8 +28,10 @@ CREDENTIALS = {
 }
 
 
-def _seed_module(module: Path, artifact_id: str = "mavencentral") -> None:
+def _seed_module(module: Path, artifact_id: str | None = None) -> None:
     module.mkdir(parents=True, exist_ok=True)
+    if artifact_id is None:
+        artifact_id = "mavencentral" if module.name == "code" else module.name
     if artifact_id:
         pom = (
             f'<project><groupId>com.example</groupId>'
@@ -328,9 +330,70 @@ class PublishBoundaryTests(unittest.TestCase):
             )
 
         self.assertEqual(space.returncode, 1)
-        self.assertIn("artifactId directory name", space.stderr)
+        self.assertIn("Maven artifactId", space.stderr)
         self.assertEqual(traversal.returncode, 1)
         self.assertIn("single reactor module directory", traversal.stderr)
+
+    def test_flat_reactor_resolves_prefixed_artifact_ids_from_other_directories(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "clients", "karatetools-clients")
+            _seed_module(workspace / "code" / "boot", "karatetools-boot")
+            _seed_module(workspace / "code" / "openapi-test", "karatetools-openapi-test")
+            _seed_module(
+                workspace / "code" / "openapi-test" / "xxx-api-rest-stable",
+                "xxx-api-rest-stable",
+            )
+            output = workspace.parent / "resolved-packages.txt"
+
+            result = self.run_validator(
+                workspace,
+                project_type="monorepo",
+                packages="karatetools-clients,karatetools-boot,xxx-api-rest-stable",
+                output=output,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                output.read_text(encoding="utf-8"),
+                ":mavencentral,clients,boot,openapi-test,"
+                "openapi-test/xxx-api-rest-stable\n",
+            )
+
+    def test_directory_named_like_the_entry_with_another_artifact_id_is_rejected(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "core", "something-else")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
+        self.assertIn("something-else", result.stderr)
+
+    def test_duplicate_artifact_id_in_differently_named_directories_is_ambiguous(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "a", "shared-core")
+            _seed_module(workspace / "code" / "b", "shared-core")
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="shared-core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId is ambiguous", result.stderr)
 
     def test_flattened_directory_without_pom_resolves_to_nested_module(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
