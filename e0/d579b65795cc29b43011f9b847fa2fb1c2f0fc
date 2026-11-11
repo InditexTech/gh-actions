@@ -1,0 +1,19 @@
+tests/test_action_contract.py
+  s_0204f3fb835684::t_7c6dc93245fb90 298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "e0d579b65795cc29b43011f9b847fa2fb1c2f0fc",
+  "prompts": {},
+  "sessions": {
+    "s_0204f3fb835684": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "16709cc7-84f9-4072-8662-90ab2bf7d0f8",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@inditex.com>"
+    }
+  }
+}
