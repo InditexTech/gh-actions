@@ -41,6 +41,7 @@ jobs:
           "$binary" pypi/action.yml
           "$binary" python-toolchain/action.yml
           "$binary" configure-release-git/action.yml
+          "$binary" release-version/action.yml
           "$binary" .github/workflows/verify.yml
 
       - name: Compile and test runtime validators
@@ -51,7 +52,8 @@ jobs:
             maven-central/scripts/inject_publish_pom.py \
             maven-central/scripts/validate_publish.py \
             npm/scripts/validate_npm_publish.py \
-            pypi/scripts/validate_distributions.py
+            pypi/scripts/validate_distributions.py \
+            release-version/scripts/release_version.py
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
   local-action:
@@ -185,7 +187,7 @@ jobs:
           persist-credentials: false
       - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
-          inputs: .github/workflows maven-central/action.yml npm/action.yml pypi/action.yml
+          inputs: .github/workflows maven-central/action.yml npm/action.yml pypi/action.yml release-version/action.yml
           collect: workflows,actions
           online-audits: false
           persona: pedantic
