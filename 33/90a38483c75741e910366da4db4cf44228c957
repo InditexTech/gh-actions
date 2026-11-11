@@ -1,0 +1,41 @@
+.github/action-release.json
+  s_0204f3fb835684::t_6b42130a5fdbc5 3
+maven-central/README.md
+  s_0204f3fb835684::t_a3291b673043d9 56,88-89
+maven-central/scripts/validate_publish.py
+  s_0204f3fb835684::t_237acb3217fdb1 19-24,147-160,166-173,180,185-186,189-190,193,195-199
+openspec/changes/maven-central-artifactid-gh-actions/.multirepo.yml
+  s_0204f3fb835684::t_eae6622bfaa26c 1-4
+openspec/changes/maven-central-artifactid-gh-actions/.openspec.yaml
+  s_0204f3fb835684::t_4c6578c98b5792 1-2
+openspec/changes/maven-central-artifactid-gh-actions/README.md
+  s_0204f3fb835684::t_9ad0d181a3cdab 1-3
+openspec/changes/maven-central-artifactid-gh-actions/design.md
+  s_0204f3fb835684::t_9debc7debea31a 1-10
+openspec/changes/maven-central-artifactid-gh-actions/proposal.md
+  s_0204f3fb835684::t_0f72ba032ef494 1-32
+openspec/changes/maven-central-artifactid-gh-actions/specs/maven-central-publish-validation/spec.md
+  s_0204f3fb835684::t_24a04cbd9c1888 1-28
+openspec/changes/maven-central-artifactid-gh-actions/tasks.md
+  s_0204f3fb835684::t_49be41f9b78e61 1-8
+openspec/config.yaml
+  s_0204f3fb835684::t_8c9df19e8fbeb0 1-29
+tests/test_validate_publish.py
+  s_0204f3fb835684::t_3af626d04fb0cd 31,33-34,333,337-397
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "3390a38483c75741e910366da4db4cf44228c957",
+  "prompts": {},
+  "sessions": {
+    "s_0204f3fb835684": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "16709cc7-84f9-4072-8662-90ab2bf7d0f8",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@inditex.com>"
+    }
+  }
+}
