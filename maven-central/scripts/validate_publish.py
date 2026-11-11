@@ -19,8 +19,8 @@ allowed to proceed:
   Maven modules inside the reactor by their artifactId, never an absolute path,
   a parent traversal, a symlink, or an ambiguous name. A name resolves to the
   unique module, at any depth, whose own ``pom.xml`` declares that artifactId,
-  whatever its directory is called; build outputs (``target/``) are never
-  candidates. Resolve-by-identity keeps the published descriptor
+  whatever its directory is called; only modules declared in the reactor's
+  ``<modules>`` are candidates. Resolve-by-identity keeps the published descriptor
   artifactId-keyed while the boundary stays path-safe.
 * The selection written for ``mvn -pl`` includes the reactor root (by
   ``:artifactId``) plus every intermediate ancestor of each released module, so
@@ -160,6 +160,48 @@ def _module_artifact_id(pom: Path) -> str | None:
     return None
 
 
+def _reactor_modules(reactor: Path) -> list[Path]:
+    """List the module directories reachable from the root pom's ``<modules>``.
+
+    Only declared reactor members are candidates, so fixture or example poms
+    that merely sit under the tree can never create a false match.
+    """
+
+    root = reactor.resolve()
+    found: list[Path] = []
+    seen = {root}
+    pending = [reactor]
+    while pending:
+        current = pending.pop()
+        try:
+            tree = ElementTree.parse(current / "pom.xml").getroot()
+        except (ElementTree.ParseError, OSError):
+            continue
+        for modules in tree.iter():
+            if modules.tag.split("}", 1)[-1] != "modules":
+                continue
+            for module in modules:
+                name = (module.text or "").strip()
+                if not name or module.tag.split("}", 1)[-1] != "module":
+                    continue
+                candidate = current / name
+                if candidate.name == "pom.xml":
+                    candidate = candidate.parent
+                pom = candidate / "pom.xml"
+                resolved = candidate.resolve()
+                if (
+                    resolved in seen
+                    or not pom.is_file()
+                    or pom.is_symlink()
+                    or not resolved.is_relative_to(root)
+                ):
+                    continue
+                seen.add(resolved)
+                found.append(candidate)
+                pending.append(candidate)
+    return found
+
+
 def _resolve_package_module(
     entry: str, reactor: Path, workspace: Path, working_directory: str
 ) -> Path:
@@ -167,23 +209,17 @@ def _resolve_package_module(
 
     The descriptor keys packages by Maven artifactId, which need not equal the
     module directory name (``clients/`` may declare ``karatetools-clients``).
-    Resolution walks every reactor pom, excluding Maven build outputs
-    (``target/``), hidden trees and symbolic poms, and requires exactly one
-    module whose declared artifactId equals the entry. A directory that merely
+    Resolution walks the modules declared by the reactor, and requires exactly
+    one whose own pom declares the entry as its artifactId. A directory that merely
     shares the entry's name is never accepted without that identity check.
     """
 
     relative_working = Path(working_directory)
-    candidates: list[Path] = []
-    for candidate_pom in reactor.rglob("pom.xml"):
-        module_dir = candidate_pom.parent
-        if module_dir == reactor or candidate_pom.is_symlink():
-            continue
-        parts = module_dir.relative_to(reactor).parts
-        if any(part == "target" or part.startswith(".") for part in parts):
-            continue
-        if _module_artifact_id(candidate_pom) == entry:
-            candidates.append(module_dir)
+    candidates = [
+        module_dir
+        for module_dir in _reactor_modules(reactor)
+        if _module_artifact_id(module_dir / "pom.xml") == entry
+    ]
 
     if not candidates:
         direct = reactor / entry

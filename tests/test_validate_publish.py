@@ -41,6 +41,15 @@ def _seed_module(module: Path, artifact_id: str | None = None) -> None:
     else:
         pom = "<project/>\n"
     (module / "pom.xml").write_text(pom, encoding="utf-8")
+    parent_pom = module.parent / "pom.xml"
+    if module.name != "code" and parent_pom.is_file():
+        text = parent_pom.read_text(encoding="utf-8")
+        entry = f"<module>{module.name}</module>"
+        if "</modules>" in text:
+            text = text.replace("</modules>", f"{entry}</modules>")
+        else:
+            text = text.replace("</project>", f"<modules>{entry}</modules></project>")
+        parent_pom.write_text(text, encoding="utf-8")
 
 
 class PublishBoundaryTests(unittest.TestCase):
@@ -280,7 +289,9 @@ class PublishBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
             _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "libs")
             _seed_module(workspace / "code" / "libs" / "core")
+            _seed_module(workspace / "code" / "plugins")
             _seed_module(workspace / "code" / "plugins" / "core")
 
             result = self.run_validator(
@@ -395,6 +406,23 @@ class PublishBoundaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("artifactId is ambiguous", result.stderr)
 
+    def test_pom_outside_declared_modules_is_not_a_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "core")
+            fixture = workspace / "code" / "core" / "src" / "test" / "fixture"
+            fixture.mkdir(parents=True)
+            (fixture / "pom.xml").write_text(
+                "<project><artifactId>core</artifactId></project>", encoding="utf-8"
+            )
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_flattened_directory_without_pom_resolves_to_nested_module(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
@@ -471,7 +499,7 @@ class PublishBoundaryTests(unittest.TestCase):
             )
 
         self.assertEqual(result.returncode, 1)
-        self.assertIn("every intermediate ancestor needs a pom.xml", result.stderr)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
 
     def test_reactor_root_without_artifact_id_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -505,6 +533,7 @@ class PublishBoundaryTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as temporary:
                     workspace = Path(temporary)
                     _seed_module(workspace / "code")
+                    _seed_module(workspace / "code" / parent_name)
                     _seed_module(workspace / "code" / parent_name / "b")
 
                     result = self.run_validator(
@@ -512,12 +541,7 @@ class PublishBoundaryTests(unittest.TestCase):
                     )
 
                 self.assertEqual(result.returncode, 1)
-                self.assertIn(
-                    ("every intermediate ancestor needs a pom.xml"
-                     if parent_name in ("a,b", "a b") else
-                     "characters that cannot be carried"),
-                    result.stderr,
-                )
+                self.assertIn("characters that cannot be carried", result.stderr)
 
     def test_requires_github_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -569,3 +593,4 @@ class PublishBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
