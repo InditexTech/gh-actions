@@ -160,17 +160,40 @@ def _module_artifact_id(pom: Path) -> str | None:
     return None
 
 
-def _reactor_modules(reactor: Path) -> list[Path]:
-    """List the module directories reachable from the root pom's ``<modules>``.
+def _declared_module_dir(current: Path, name: str, root: Path) -> Path | None:
+    """Return the canonical directory of one ``<module>`` entry, or None.
 
-    Only declared reactor members are candidates, so fixture or example poms
-    that merely sit under the tree can never create a false match.
+    Symbolic components are rejected on the declaration exactly as written,
+    before any ``..`` is normalized, so the directory whose pom is read for the
+    identity check is the same one selected for publication.
     """
 
-    root = reactor.resolve()
-    found: list[Path] = []
+    walked = current
+    for part in Path(name).parts:
+        walked = walked / part
+        if part not in (".", "..") and walked.is_symlink():
+            return None
+    candidate = Path(os.path.normpath(current / name))
+    if candidate.name == "pom.xml":
+        candidate = candidate.parent
+    pom = candidate / "pom.xml"
+    if not pom.is_file() or pom.is_symlink() or not candidate.is_relative_to(root):
+        return None
+    return candidate
+
+
+def _reactor_index(reactor: Path) -> dict[str, list[Path]]:
+    """Map each artifactId to the reactor modules declaring it.
+
+    Only modules reachable from the root pom's ``<modules>`` are indexed, so
+    fixture or example poms under the tree can never create a false match. Each
+    pom is parsed once per validation.
+    """
+
+    root = Path(os.path.normpath(reactor))
+    index: dict[str, list[Path]] = {}
     seen = {root}
-    pending = [reactor]
+    pending = [root]
     while pending:
         current = pending.pop()
         try:
@@ -184,26 +207,23 @@ def _reactor_modules(reactor: Path) -> list[Path]:
                 name = (module.text or "").strip()
                 if not name or module.tag.split("}", 1)[-1] != "module":
                     continue
-                candidate = current / name
-                if candidate.name == "pom.xml":
-                    candidate = candidate.parent
-                pom = candidate / "pom.xml"
-                resolved = candidate.resolve()
-                if (
-                    resolved in seen
-                    or not pom.is_file()
-                    or pom.is_symlink()
-                    or not resolved.is_relative_to(root)
-                ):
+                candidate = _declared_module_dir(current, name, root)
+                if candidate is None or candidate in seen:
                     continue
-                seen.add(resolved)
-                found.append(candidate)
+                seen.add(candidate)
                 pending.append(candidate)
-    return found
+                artifact_id = _module_artifact_id(candidate / "pom.xml")
+                if artifact_id:
+                    index.setdefault(artifact_id, []).append(candidate)
+    return index
 
 
 def _resolve_package_module(
-    entry: str, reactor: Path, workspace: Path, working_directory: str
+    entry: str,
+    reactor: Path,
+    workspace: Path,
+    working_directory: str,
+    index: dict[str, list[Path]],
 ) -> Path:
     """Resolve one artifactId to the unique module whose own pom declares it.
 
@@ -215,11 +235,7 @@ def _resolve_package_module(
     """
 
     relative_working = Path(working_directory)
-    candidates = [
-        module_dir
-        for module_dir in _reactor_modules(reactor)
-        if _module_artifact_id(module_dir / "pom.xml") == entry
-    ]
+    candidates = index.get(entry, [])
 
     if not candidates:
         direct = reactor / entry
@@ -257,9 +273,12 @@ def validate_packages(
         fail("packages may only be supplied for a monorepo release")
     working_directory = reactor.relative_to(workspace).as_posix()
     resolved: list[str] = [f":{_reactor_root_artifact_id(reactor)}"]
+    index = _reactor_index(reactor)
     for entry in entries:
         _validate_package_name(entry)
-        module = _resolve_package_module(entry, reactor, workspace, working_directory)
+        module = _resolve_package_module(
+            entry, reactor, workspace, working_directory, index
+        )
         module_pom = module / "pom.xml"
         if module_pom.is_symlink() or not module_pom.is_file():
             fail(f"package is not a Maven module: {entry!r}")

@@ -423,6 +423,31 @@ class PublishBoundaryTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_symlinked_module_declaration_cannot_redirect_the_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            _seed_module(workspace / "code")
+            _seed_module(workspace / "code" / "core", "other-core")
+            _seed_module(workspace / "code" / "sibling" / "core", "core")
+            (workspace / "code" / "sibling" / "bridge").mkdir()
+            (workspace / "code" / "link").symlink_to(
+                workspace / "code" / "sibling" / "bridge"
+            )
+            root_pom = workspace / "code" / "pom.xml"
+            root_pom.write_text(
+                root_pom.read_text(encoding="utf-8").replace(
+                    "<modules>", "<modules><module>link/../core</module>"
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                workspace, project_type="monorepo", packages="core"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("artifactId was not found in the reactor", result.stderr)
+
     def test_flattened_directory_without_pom_resolves_to_nested_module(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
