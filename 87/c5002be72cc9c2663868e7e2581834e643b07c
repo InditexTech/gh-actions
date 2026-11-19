@@ -1,0 +1,25 @@
+npm/README.md
+  s_8de240d6f9ebd8::t_3b87aa183b30ee 46,59
+npm/action.yml
+  s_8de240d6f9ebd8::t_f9c618ace1a51f 19
+npm/scripts/validate_npm_publish.py
+  s_8de240d6f9ebd8::t_99f7846c8d8b45 20,28,104,106
+tests/test_validate_npm_publish.py
+  s_8de240d6f9ebd8::t_d0411715a73b34 246-255,267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "87c5002be72cc9c2663868e7e2581834e643b07c",
+  "prompts": {},
+  "sessions": {
+    "s_8de240d6f9ebd8": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "7a8eea53-c3f4-4962-a636-5361075ef1e6",
+        "model": "claude-sonnet-5.5"
+      },
+      "human_author": "Ivan Alvarez Sabin <ivanasabi@inditex.com>"
+    }
+  }
+}
