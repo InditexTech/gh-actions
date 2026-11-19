@@ -43,7 +43,7 @@ The action has no outputs and accepts exactly these inputs:
 | `working-directory` | Yes | — | Project root relative to `GITHUB_WORKSPACE`; the `package.json` / workspaces root. |
 | `project-type` | Yes | — | Exactly `single` (one package) or `workspaces` (declared members). |
 | `artifact-directory` | Yes | — | Directory of pre-built `.tgz` tarballs inside `GITHUB_WORKSPACE` or `RUNNER_TEMP`. |
-| `dist-tag` | No | `latest` | Exactly `next` (snapshots) or `latest` (releases). |
+| `dist-tag` | No | `latest` | `next` or `pr-<number>` (snapshots) or `latest` (releases). |
 | `registry-url` | No | `https://registry.npmjs.org/` | Reserved seam for a governed private registry; defaults to the public npm registry. |
 
 `NPM_TOKEN` is **not** an input. When a brand-new package cannot yet use trusted
@@ -56,7 +56,7 @@ Validation is mandatory and fails **before anything is published** when:
 
 - neither `id-token: write` (trusted publishing) nor an `NPM_TOKEN` fallback is available;
 - `project-type` is not exactly `single` or `workspaces`;
-- `dist-tag` is not exactly `next` or `latest`;
+- `dist-tag` is not exactly `next`, `latest` or `pr-<number>`;
 - `working-directory` or `artifact-directory` escapes its allowed root or contains a symbolic path component;
 - the artifact directory is empty, nested, or holds symlinks, special files, or anything other than `.tgz` tarballs;
 - `project-type` is `single` but the artifact directory holds more than one tarball.

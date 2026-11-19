@@ -16,7 +16,7 @@ inputs:
     description: Directory of pre-built .tgz tarball(s) to publish, inside GITHUB_WORKSPACE or RUNNER_TEMP.
     required: true
   dist-tag:
-    description: npm dist-tag to publish under, exactly 'next' (snapshots) or 'latest' (releases).
+    description: npm dist-tag to publish under: 'next' or 'pr-<number>' (snapshots) or 'latest' (releases).
     required: false
     default: latest
   registry-url:
