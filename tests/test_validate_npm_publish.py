@@ -243,7 +243,16 @@ class NpmPublishValidationTests(unittest.TestCase):
             workspace = Path(temporary_directory)
             self._seed(workspace, tarballs=1)
 
-            for dist_tag in ("beta", "latest; echo injected"):
+            for dist_tag in (
+                "beta",
+                "latest; echo injected",
+                "pr-",
+                "pr-0",
+                "pr-1a",
+                "pr-1\nnext",
+                "PR-1",
+                "pr-1234567890",
+            ):
                 with self.subTest(dist_tag=dist_tag):
                     result = self.run_validator(workspace, "dist", dist_tag=dist_tag)
                     self.assertNotEqual(result.returncode, 0)
@@ -255,7 +264,7 @@ class NpmPublishValidationTests(unittest.TestCase):
             workspace = Path(temporary_directory)
             self._seed(workspace, tarballs=1)
 
-            for dist_tag in ("next", "latest"):
+            for dist_tag in ("next", "latest", "pr-91"):
                 with self.subTest(dist_tag=dist_tag):
                     result = self.run_validator(workspace, "dist", dist_tag=dist_tag)
                     self.assertEqual(result.returncode, 0, result.stderr)

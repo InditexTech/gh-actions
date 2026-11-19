@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import stat
+import re
 import sys
 from pathlib import Path
 from typing import Mapping, NoReturn, Sequence
@@ -24,6 +25,7 @@ from typing import Mapping, NoReturn, Sequence
 TARBALL_SUFFIX = ".tgz"
 VALID_PROJECT_TYPES = frozenset({"single", "workspaces"})
 VALID_DIST_TAGS = frozenset({"latest", "next"})
+PULL_REQUEST_DIST_TAG = re.compile(r"pr-[1-9][0-9]{0,8}")
 OIDC_ENVIRONMENT_VARIABLES = (
     "ACTIONS_ID_TOKEN_REQUEST_URL",
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
@@ -99,9 +101,9 @@ def validate_project_type(project_type: str) -> None:
 
 
 def validate_dist_tag(dist_tag: str) -> None:
-    if dist_tag not in VALID_DIST_TAGS:
+    if dist_tag not in VALID_DIST_TAGS and not PULL_REQUEST_DIST_TAG.fullmatch(dist_tag):
         supported = ", ".join(sorted(VALID_DIST_TAGS))
-        fail(f"dist-tag must be one of: {supported}")
+        fail(f"dist-tag must be one of: {supported}, or pr-<number>")
 
 
 def validate_publish_credentials(environment: Mapping[str, str]) -> None:
